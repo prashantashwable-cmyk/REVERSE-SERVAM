@@ -58,4 +58,4 @@ Test IDs: `DB:<file> › <test>` (supabase/tests, real PostgreSQL + PostGIS), `U
 | §51 | Private storage, path binding, short-lived links, immutable evidence | storage policies, `register_evidence`, web signed URLs | DB:surveys › evidence… | Done |
 | §52.3 | No last-write-wins on drafts | revision version check | DB:surveys › drafts autosave…; UNIT detectConflict | Done |
 | §55 | Structured error codes, no SQL leakage | `app.raise_error`, `fromServerError` | UNIT:gates-sync-errors › maps server errors…; WEB:actions | Done |
-| §58 | Translation keys, INR / IST formatting, text + colour status | `@aiec/domain` i18n, badges/chips | UNIT money & i18n | Done (English only) |
+| §58 | Translation keys, INR / IST formatting, text + colour status | `@aiec/domain` i18n, badges/chips | UNIT money & i18n | Done: Marathi (default) + English; `npm run check:i18n` blocks untranslated text |

@@ -6,6 +6,7 @@ import { Text, View } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { config, isConfigured } from './lib/config';
 import { pendingCount, queue, sendOperation } from './lib/field';
+import { LocaleProvider, useT } from './lib/locale';
 import { supabase } from './lib/supabase';
 import { LoginScreen } from './screens/LoginScreen';
 import { SurveyListScreen } from './screens/SurveyListScreen';
@@ -25,6 +26,15 @@ export interface AppContextValue {
 }
 
 export default function App() {
+  return (
+    <LocaleProvider>
+      <AppShell />
+    </LocaleProvider>
+  );
+}
+
+function AppShell() {
+  const { t } = useT();
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const [route, setRoute] = useState<Route>({ name: 'list' });
@@ -74,18 +84,18 @@ export default function App() {
   const signOut = useCallback(async () => {
     const n = await pendingCount();
     // Never lose field work: unsynced operations block sign-out (§52, release gate "no data loss").
-    if (n > 0) return `${n} item(s) are not yet synced. Connect to the internet and sync before signing out.`;
+    if (n > 0) return t('mobile.signout_blocked', { count: n });
     await supabase.auth.signOut();
     const { clearLocalData } = await import('./lib/db');
     await clearLocalData();
     return null;
-  }, []);
+  }, [t]);
 
   if (!isConfigured) {
     return (
       <SafeAreaProvider>
         <SafeAreaView style={[styles.screen, styles.content]}>
-          <Banner tone="crit">This build has no server configured (EXPO_PUBLIC_SUPABASE_URL / EXPO_PUBLIC_SUPABASE_ANON_KEY).</Banner>
+          <Banner tone="crit">{t('mobile.no_server')}</Banner>
         </SafeAreaView>
       </SafeAreaProvider>
     );
@@ -101,12 +111,12 @@ export default function App() {
         <StatusBar style="dark" />
         {config.environment === 'demo' ? (
           <View style={{ backgroundColor: colors.warn, padding: 4 }}>
-            <Text style={{ color: colors.white, textAlign: 'center', fontWeight: '700' }}>DEMO — synthetic data only</Text>
+            <Text style={{ color: colors.white, textAlign: 'center', fontWeight: '700' }}>{t('common.demo_banner')}</Text>
           </View>
         ) : null}
         {ctx && !online ? (
           <View accessibilityRole="alert" style={{ backgroundColor: colors.navyLight, padding: 6 }}>
-            <Text style={{ color: colors.white, textAlign: 'center' }}>Offline — work is saved on this device and will sync automatically</Text>
+            <Text style={{ color: colors.white, textAlign: 'center' }}>{t('mobile.offline_banner')}</Text>
           </View>
         ) : null}
         {loading ? null : !ctx ? (

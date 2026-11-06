@@ -14,7 +14,8 @@
     "test:db": "npm run test:db --workspace @aiec/db-tests",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "build:web": "npm run build --workspace @aiec/web",
-    "build:demo": "npm run build --workspace @aiec/demo"
+    "build:demo": "npm run build --workspace @aiec/demo",
+    "check:i18n": "node scripts/check-i18n.mjs"
   },
   "engines": {
     "node": ">=20.11"

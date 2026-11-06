@@ -139,6 +139,20 @@ describe('Slice 1 — identity, role context and RBAC', () => {
     await expectCode(as('owner').rpc('list_assignable_users', { p_purpose: 'everyone' }), 'VALIDATION_FAILED');
   });
 
+  it('interface language: Marathi by default, changeable by any signed-in user (also pending), audited', async () => {
+    const [row] = await admin<{ preferred_locale: string }>(pool, 'select preferred_locale from public.user_profiles where id = $1', [fx.users.pending1]);
+    expect(row!.preferred_locale).toBe('mr');
+    expect((await as('pending1').rpc('get_my_context')).profile.preferred_locale).toBe('mr');
+    expect(await as('pending1').rpc('set_my_locale', { p_locale: 'en' })).toMatchObject({ preferred_locale: 'en', changed: true });
+    expect(await as('pending1').rpc('set_my_locale', { p_locale: 'en' })).toMatchObject({ changed: false });
+    await expectCode(as('pending1').rpc('set_my_locale', { p_locale: 'fr' }), 'VALIDATION_FAILED');
+    await expect(anon.rpc('set_my_locale', { p_locale: 'mr' })).rejects.toMatchObject({ pgCode: '42501' });
+    const audit = await admin<{ action: string; new_values: { preferred_locale: string } }>(
+      pool, `select action, new_values from public.audit_logs where entity_id = $1 and action = 'profile.locale_changed'`, [fx.users.pending1]);
+    expect(audit).toEqual([{ action: 'profile.locale_changed', new_values: { preferred_locale: 'en' } }]);
+    await as('pending1').rpc('set_my_locale', { p_locale: 'mr' });
+  });
+
   it('profile updates use optimistic concurrency', async () => {
     const ctx = await as('sales2').rpc('get_my_context');
     await as('sales2').rpc('update_my_profile', { p_full_name: 'Sales Two', p_preferred_locale: 'mr', p_expected_version: ctx.profile.version });

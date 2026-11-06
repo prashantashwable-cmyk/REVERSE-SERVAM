@@ -1,15 +1,11 @@
-import { formatDateTimeIST, formatPhone, t } from '@aiec/domain';
+import { formatDateTimeIST, formatPhone, type Locale } from '@aiec/domain';
 
-export function dt(iso: string | null | undefined): string {
-  return iso ? formatDateTimeIST(iso) : '—';
+export function dt(iso: string | null | undefined, locale: Locale): string {
+  return iso ? formatDateTimeIST(iso, locale) : '—';
 }
 
 export function phone(e164: string | null | undefined): string {
   return e164 ? formatPhone(e164) : '—';
-}
-
-export function label(key: string): string {
-  return t(key);
 }
 
 /** Current IST wall-clock as a datetime-local value (for input defaults / min). */

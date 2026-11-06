@@ -33,9 +33,9 @@ export async function kvSet(key: string, value: unknown): Promise<void> {
   await (await db()).runAsync('INSERT OR REPLACE INTO kv (key, value, updated_at) VALUES (?, ?, ?)', [key, JSON.stringify(value), new Date().toISOString()]);
 }
 
-/** Wipe everything on sign-out so the next user never sees another user's work package. */
+/** Wipe everything on sign-out so the next user never sees another user's work package (the device language choice stays). */
 export async function clearLocalData(): Promise<void> {
-  await (await db()).execAsync('DELETE FROM kv; DELETE FROM drafts; DELETE FROM sync_ops;');
+  await (await db()).execAsync("DELETE FROM kv WHERE key <> 'locale'; DELETE FROM drafts; DELETE FROM sync_ops;");
 }
 
 export interface LocalDraft {

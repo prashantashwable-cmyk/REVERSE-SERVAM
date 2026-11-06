@@ -1,14 +1,16 @@
-import { errorMessage, fromServerError, type ErrorCode, type ServerErrorLike } from '@aiec/domain';
+import { fromServerError, type ErrorCode, type ServerErrorLike } from '@aiec/domain';
 
-/** Uniform result shape for every server action (rendered by <FormError />). */
+/**
+ * Uniform result shape for every server action (rendered by <FormStatus />).
+ * Results carry translation KEYS and error CODES, never sentences, so the
+ * browser renders them in the user's language.
+ */
 export type ActionState =
   | { status: 'idle' }
-  | { status: 'success'; message: string; data?: Record<string, unknown> }
+  | { status: 'success'; messageKey: string; data?: Record<string, unknown> }
   | {
       status: 'error';
       code: ErrorCode;
-      title: string;
-      nextAction: string;
       fields: string[];
       missing: string[];
       details: Record<string, unknown>;
@@ -19,12 +21,9 @@ export const IDLE: ActionState = { status: 'idle' };
 /** Map a PostgREST / RPC error to a user-safe action state (no SQL, no stack traces). */
 export function errorState(err: ServerErrorLike | null | undefined): ActionState {
   const d = fromServerError(err);
-  const m = errorMessage(d.code);
   return {
     status: 'error',
     code: d.code,
-    title: m.title,
-    nextAction: m.nextAction,
     fields: Array.isArray(d.details.fields) ? (d.details.fields as string[]) : [],
     missing: Array.isArray(d.details.missing) ? (d.details.missing as string[]) : [],
     details: d.details,
@@ -32,8 +31,11 @@ export function errorState(err: ServerErrorLike | null | undefined): ActionState
 }
 
 export function localError(code: ErrorCode, fields: string[] = []): ActionState {
-  const m = errorMessage(code);
-  return { status: 'error', code, title: m.title, nextAction: m.nextAction, fields, missing: [], details: {} };
+  return { status: 'error', code, fields, missing: [], details: {} };
+}
+
+export function success(messageKey: string): ActionState {
+  return { status: 'success', messageKey };
 }
 
 /** FormData helpers: trimmed string or null. */

@@ -1,6 +1,4 @@
-import Link from 'next/link';
 import type { ReactNode } from 'react';
-import { errorMessage, type DomainError } from '@aiec/domain';
 
 export function PageHeader({ title, subtitle, actions }: { title: string; subtitle?: string; actions?: ReactNode }) {
   return (
@@ -76,45 +74,8 @@ export function EmptyState({ title, body, action }: { title: string; body?: stri
   );
 }
 
-export function ErrorPanel({ error }: { error: DomainError }) {
-  const m = errorMessage(error.code);
-  return (
-    <div role="alert" className="rounded-lg border border-crit-700/30 bg-crit-50 p-4 text-crit-700">
-      <p className="font-semibold">{m.title}</p>
-      <p className="mt-1 text-sm">{m.nextAction}</p>
-    </div>
-  );
-}
 
-export function PermissionDenied({ what }: { what: string }) {
-  return (
-    <div role="alert" className="rounded-lg border border-warn-700/30 bg-warn-50 p-6 text-warn-700">
-      <p className="font-semibold">You do not have access to {what}.</p>
-      <p className="mt-1 text-sm">If your work needs it, ask an administrator to review your role assignment.</p>
-      <Link prefetch={false} href="/" className="mt-3 inline-block text-sm font-medium underline">
-        Back to home
-      </Link>
-    </div>
-  );
-}
 
-export function Field({ label, htmlFor, required, hint, children }: { label: string; htmlFor: string; required?: boolean; hint?: string; children: ReactNode }) {
-  return (
-    <div className="flex flex-col gap-1">
-      <label htmlFor={htmlFor} className="text-sm font-medium text-navy-800">
-        {label}
-        {required ? (
-          <span className="text-crit-700" aria-hidden="true">
-            {' '}*
-          </span>
-        ) : null}
-        {required ? <span className="sr-only"> (required)</span> : null}
-      </label>
-      {children}
-      {hint ? <p className="text-xs text-silver-700">{hint}</p> : null}
-    </div>
-  );
-}
 
 export const inputClass =
   'w-full rounded-md border border-silver-300 bg-white px-3 py-2 text-sm text-navy-900 shadow-sm focus:border-navy-600 focus:outline-none focus:ring-2 focus:ring-navy-600/30 disabled:bg-silver-100';

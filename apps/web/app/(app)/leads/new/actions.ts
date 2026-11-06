@@ -67,5 +67,5 @@ export async function createLeadAction(prev: NewLeadState, form: FormData): Prom
   }
   // Navigation happens on the client (see new-lead-form.tsx): a server-action redirect was
   // observed not to navigate reliably (Next 15.5, verified in E2E).
-  return { ...next({ status: 'success', message: 'Lead created.' }), createdLeadId: (data as { lead_id: string }).lead_id };
+  return { ...next({ status: 'success', messageKey: 'lead_form.created' }), createdLeadId: (data as { lead_id: string }).lead_id };
 }

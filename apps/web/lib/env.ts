@@ -21,6 +21,7 @@ export function readPublicEnv(): PublicEnv | null {
 
 export function requirePublicEnv(): PublicEnv {
   const env = readPublicEnv();
+  // i18n-ignore: developer-facing configuration error, never shown to end users
   if (!env) throw new Error('Supabase is not configured: set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY');
   return env;
 }

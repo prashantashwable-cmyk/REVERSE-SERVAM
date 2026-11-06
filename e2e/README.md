@@ -19,8 +19,17 @@ NEXT_PUBLIC_SUPABASE_URL=http://127.0.0.1:54400 NEXT_PUBLIC_SUPABASE_ANON_KEY=e2
 NEXT_PUBLIC_AIEC_ENV=demo npx next build && npx next start -p 3123 &
 cd ../..
 
-# 4. Walkthrough (needs Playwright + Chromium installed)
+# 4. Walkthrough (needs Playwright + Chromium installed). Runs in Marathi by default and fails if
+#    any English word (other than typed data and tokens such as AIEC, GPS, mm) is visible on a page.
 mkdir -p /tmp/aiec-shots && node e2e/walkthrough.cjs /tmp/aiec-shots
+# English pass (refresh the database first, step 1):
+AIEC_E2E_LOCALE=en node e2e/walkthrough.cjs /tmp/aiec-shots-en
+```
+
+GitHub Pages demo on a phone-sized screen (Marathi, the switch to English and back, the choice kept across reloads):
+
+```bash
+npm run build:demo && (cd docs && python3 -m http.server 8765 &) && node e2e/demo-test.cjs /tmp/aiec-demo-shots
 ```
 
 Refresh the database (step 1) before each run: the scenario creates leads whose names would otherwise be (correctly) flagged as duplicates on the next run.

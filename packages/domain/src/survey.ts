@@ -127,7 +127,7 @@ function isPresent(v: unknown): boolean {
 
 export interface SurveyValidationResult {
   failures: GuardFailure[];
-  warnings: { key: string; message: string }[];
+  warnings: { key: string; message: string; messageKey: string; params: Record<string, string | number> }[];
   completion: { done: number; total: number };
 }
 
@@ -152,17 +152,24 @@ export function validateSurveySubmission(
   );
 
   const failures: GuardFailure[] = [];
-  if (missingFields.length) failures.push({ code: 'REQUIRED_FIELD_MISSING', message: 'Required survey fields missing', fields: missingFields });
+  if (missingFields.length) failures.push({ code: 'REQUIRED_FIELD_MISSING', message: 'Required survey fields missing', messageKey: 'gate1.fields_missing', fields: missingFields });
   if (missingMeasurements.length)
-    failures.push({ code: 'REQUIRED_FIELD_MISSING', message: 'Required measurements missing', fields: missingMeasurements.map((k) => `measurement.${k}`) });
-  if (missingEvidence.length) failures.push({ code: 'EVIDENCE_REQUIRED', message: 'Required photo evidence missing', missing: missingEvidence });
+    failures.push({ code: 'REQUIRED_FIELD_MISSING', message: 'Required measurements missing', messageKey: 'gate1.measurements_missing', fields: missingMeasurements.map((k) => `measurement.${k}`) });
+  if (missingEvidence.length) failures.push({ code: 'EVIDENCE_REQUIRED', message: 'Required photo evidence missing', messageKey: 'gate1.evidence_missing', missing: missingEvidence });
   if (missingDocuments.length)
-    failures.push({ code: 'EVIDENCE_REQUIRED', message: 'Attach documents or mark them unavailable with a reason', missing: missingDocuments });
+    failures.push({ code: 'EVIDENCE_REQUIRED', message: 'Attach documents or mark them unavailable with a reason', messageKey: 'gate1.documents_missing', missing: missingDocuments });
 
   const warnings = measurements.flatMap((m) => {
     const range = PLAUSIBLE_RANGES_MM[m.key];
     if (!range || (m.value_mm >= range[0] && m.value_mm <= range[1])) return [];
-    return [{ key: m.key, message: `${m.key} = ${m.value_mm} mm is outside the usual ${range[0]}–${range[1]} mm range; re-check (not an engineering decision)` }];
+    return [
+      {
+        key: m.key,
+        message: `${m.key} = ${m.value_mm} mm is outside the usual ${range[0]}–${range[1]} mm range; re-check (not an engineering decision)`,
+        messageKey: 'gate1.out_of_range',
+        params: { measure: m.key, value: m.value_mm, min: range[0], max: range[1] },
+      },
+    ];
   });
 
   const total = req.required_fields.length + req.required_measurements.length + req.required_evidence.length + req.required_documents.length;

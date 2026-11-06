@@ -76,7 +76,7 @@ Not run here: web flows against a hosted Supabase project (the E2E gateway stand
 - No external messaging (WhatsApp/SMS/email), payments, e-sign, push notifications or accounting export; notifications are in-app records.
 - Duplicate *merge execution* is not implemented (requests are recorded and routed).
 - Evidence SHA-256 is computed on the device and recorded; server-side re-hashing / malware scanning is not implemented.
-- Marathi / Hindi dictionaries are empty (keys are in place).
+- Marathi is complete and is the default language, with an English switch, in all three apps. The Marathi text was written to a consistent glossary (`docs/marathi-glossary.md`) and should get a native-speaker business review before production. Hindi is not translated (it falls back to English). Native date/time pickers follow the phone/browser language, not the app's.
 - Android release pipeline (EAS build, signing, crash reporting) is not configured; `app.json` sets the application id `in.aiec.field` and permissions.
 - Rate limiting relies on Supabase Auth defaults; no custom limits on RPCs.
 - Open business decisions: see `docs/decision-register.md` (D-004…D-007, D-010, D-011, D-020 are blocking for later slices).

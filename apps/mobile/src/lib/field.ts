@@ -245,7 +245,7 @@ export async function sendOperation(op: SyncOperation): Promise<unknown> {
     }
     case 'evidence.upload': {
       const file = new File(String(p.local_uri));
-      if (!file.exists) throw new DomainError('FILE_UPLOAD_FAILED', 'local evidence file missing');
+      if (!file.exists) throw new DomainError('FILE_UPLOAD_FAILED', 'local evidence file missing'); // i18n-ignore: developer diagnostic
       const bytes = await file.bytes();
       const up = await supabase.storage.from('evidence').upload(String(p.storage_path), bytes, { contentType: String(p.mime_type), upsert: false });
       // "Already exists" after a lost response is success: the path is unique per operation id.

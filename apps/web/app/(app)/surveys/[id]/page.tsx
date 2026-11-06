@@ -1,24 +1,32 @@
 import { notFound } from 'next/navigation';
-import { allowedActions, fromServerError, surveyMachine, t } from '@aiec/domain';
-import { Card, EmptyState, ErrorPanel, KeyValue, PageHeader, StateBadge } from '@/components/ui';
+import { allowedActions, fromServerError, hasMessage, surveyMachine } from '@aiec/domain';
+import { Card, EmptyState, KeyValue, PageHeader, StateBadge } from '@/components/ui';
+import { ErrorPanel } from '@/components/ui-client';
+import { getT } from '@/lib/i18n';
 import { can, getContext } from '@/lib/context';
 import { dt, istNowLocal, phone } from '@/lib/format';
 import { supabaseServer } from '@/lib/supabase/server';
 import { CancelSurveyForm, GpsReviewForm, RequestRevisionForm, RescheduleForm } from './survey-forms';
 
-export const metadata = { title: 'Survey' };
+export async function generateMetadata() {
+  const { t } = await getT();
+  return { title: t('survey.title') };
+}
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export default async function SurveyDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   if (!UUID_RE.test(id)) notFound();
+  const { t, locale } = await getT();
+  const d = (iso: string | null | undefined) => dt(iso, locale);
+  const revStatus = (st: string) => t(`enum.revision_status.${st}`);
   const result = await getContext();
-  if (!result.ok) return <ErrorPanel error={result.error} />;
+  if (!result.ok) return <ErrorPanel code={result.error.code} />;
   const { ctx } = result;
   const supabase = await supabaseServer();
 
   const { data: survey, error } = await supabase.from('surveys').select('*, sites(*)').eq('id', id).maybeSingle();
-  if (error) return <ErrorPanel error={fromServerError(error)} />;
+  if (error) return <ErrorPanel code={fromServerError(error).code} />;
   if (!survey) notFound();
 
   const [{ data: revisions }, { data: evidence }, { data: lead }] = await Promise.all([
@@ -49,48 +57,48 @@ export default async function SurveyDetail({ params }: { params: Promise<{ id: s
     <>
       <PageHeader
         title={`${survey.survey_number} · ${survey.sites?.name ?? ''}`}
-        subtitle={lead ? `Lead ${lead.lead_number}` : undefined}
+        subtitle={lead ? t('survey.lead_ref', { number: lead.lead_number }) : undefined}
         actions={<StateBadge state={survey.status} labelText={t(`survey.state.${survey.status}`)} />}
       />
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-        <Card title="Appointment">
+        <Card title={t('survey.appointment')}>
           <KeyValue
             items={[
-              ['Scheduled', `${dt(survey.scheduled_start)} → ${dt(survey.scheduled_end)}`],
-              ['Scope', survey.scope],
-              ['Site contact', `${survey.site_contact_name} · ${phone(survey.site_contact_phone)}`],
-              ['Instructions', survey.special_instructions ?? '—'],
-              ['Status note', survey.status_reason ?? '—'],
+              [t('survey.scheduled'), `${d(survey.scheduled_start)} → ${d(survey.scheduled_end)}`],
+              [t('field.scope'), survey.scope],
+              [t('survey.site_contact'), `${survey.site_contact_name} · ${phone(survey.site_contact_phone)}`],
+              [t('survey.instructions'), survey.special_instructions ?? '—'],
+              [t('survey.status_note'), survey.status_reason ?? '—'],
             ]}
           />
         </Card>
-        <Card title="Check-in">
+        <Card title={t('survey.checkin')}>
           <KeyValue
             items={[
-              ['Checked in (server time)', dt(survey.checked_in_at)],
-              ['Device time', dt(survey.check_in_client_time)],
-              ['GPS', survey.gps_status ? (survey.gps_status === 'verified' ? `Verified (±${survey.check_in_accuracy_m} m)` : survey.gps_status.replace(/_/g, ' ')) : 'Not checked in'],
-              ['Exception reason', survey.gps_exception_reason ?? '—'],
-              ['Exception review', survey.gps_exception_decision ? `${survey.gps_exception_decision} · ${dt(survey.gps_exception_reviewed_at)}` : '—'],
+              [t('survey.checked_in_server'), d(survey.checked_in_at)],
+              [t('survey.device_time'), d(survey.check_in_client_time)],
+              [t('survey.gps'), survey.gps_status ? (survey.gps_status === 'verified' ? t('survey.gps_verified_acc', { metres: survey.check_in_accuracy_m }) : t(`enum.gps.${survey.gps_status}`)) : t('survey.not_checked_in')],
+              [t('survey.exception_reason'), survey.gps_exception_reason ?? '—'],
+              [t('survey.exception_review'), survey.gps_exception_decision ? `${t(`enum.gps_decision.${survey.gps_exception_decision}`)} · ${d(survey.gps_exception_reviewed_at)}` : '—'],
             ]}
           />
         </Card>
       </div>
 
-      <Card title={current ? `Revision ${current.revision_no} (${current.status})` : 'Survey data'} className="mt-4">
+      <Card title={current ? t('survey.revision_title', { no: current.revision_no, status: revStatus(current.status) }) : t('survey.data')} className="mt-4">
         {current ? (
           <>
-            {current.revision_reason ? <p className="mb-2 text-sm text-warn-700">Reason for this revision: {current.revision_reason}</p> : null}
-            <h3 className="text-sm font-semibold">Measurements (normalized to mm; entered value preserved)</h3>
+            {current.revision_reason ? <p className="mb-2 text-sm text-warn-700">{t('survey.revision_reason', { reason: current.revision_reason })}</p> : null}
+            <h3 className="text-sm font-semibold">{t('survey.measurements_heading')}</h3>
             {current.survey_measurements?.length ? (
               <table className="mt-2 w-full text-left text-sm">
                 <thead className="text-xs uppercase text-silver-700">
-                  <tr><th className="py-1 pr-3">Measurement</th><th className="py-1 pr-3">Level</th><th className="py-1 pr-3">Value (mm)</th><th className="py-1 pr-3">As entered</th></tr>
+                  <tr><th className="py-1 pr-3">{t('survey.col_measurement')}</th><th className="py-1 pr-3">{t('survey.col_level')}</th><th className="py-1 pr-3">{t('survey.col_value_mm')}</th><th className="py-1 pr-3">{t('survey.col_as_entered')}</th></tr>
                 </thead>
                 <tbody>
                   {current.survey_measurements.map((m: any) => (
                     <tr key={`${m.key}-${m.level_label}`} className="border-t border-silver-200">
-                      <td className="py-1 pr-3">{m.key.replace(/_/g, ' ')}</td>
+                      <td className="py-1 pr-3">{t(`measure.${m.key}`)}</td>
                       <td className="py-1 pr-3">{m.level_label || '—'}</td>
                       <td className="py-1 pr-3 font-mono">{m.value_mm}</td>
                       <td className="py-1 pr-3 font-mono">{m.entered_value} {m.entered_unit}</td>
@@ -99,65 +107,119 @@ export default async function SurveyDetail({ params }: { params: Promise<{ id: s
                 </tbody>
               </table>
             ) : (
-              <p className="text-sm text-silver-700">No measurements yet.</p>
+              <p className="text-sm text-silver-700">{t('survey.no_measurements')}</p>
             )}
-            <h3 className="mt-4 text-sm font-semibold">Observations</h3>
-            <pre className="mt-1 max-h-80 overflow-auto rounded bg-silver-100 p-3 text-xs">{JSON.stringify(current.data, null, 2)}</pre>
+            <h3 className="mt-4 text-sm font-semibold">{t('survey.observations')}</h3>
+            <Observations data={(current.data ?? {}) as Record<string, unknown>} t={t} />
           </>
         ) : (
-          <EmptyState title="No data captured yet" />
+          <EmptyState title={t('survey.no_data')} />
         )}
         {revisions && revisions.length > 1 ? (
-          <p className="mt-3 text-xs text-silver-700">Earlier revisions are preserved: {revisions.filter((r) => r.id !== current?.id).map((r) => `rev ${r.revision_no} (${r.status})`).join(', ')}.</p>
+          <p className="mt-3 text-xs text-silver-700">
+            {t('survey.earlier_revisions', { list: revisions.filter((r) => r.id !== current?.id).map((r) => t('survey.rev_short', { no: r.revision_no, status: revStatus(r.status) })).join(', ') })}
+          </p>
         ) : null}
       </Card>
 
-      <Card title="Evidence" className="mt-4">
+      <Card title={t('survey.evidence')} className="mt-4">
         {evidence && evidence.length > 0 ? (
           <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {evidence.map((e) => (
               <li key={e.id} className="rounded-md border border-silver-200 p-3 text-sm">
-                <p className="font-semibold">{e.category.replace(/^doc_/, 'document: ').replace(/_/g, ' ')}</p>
-                <p className="text-xs text-silver-700">Captured {dt(e.captured_at)} · received {dt(e.server_received_at)}</p>
-                <p className="text-xs text-silver-700">Source: {e.source.replace(/_/g, ' ')}{e.source_exception_reason ? ` — ${e.source_exception_reason}` : ''}</p>
+                <p className="font-semibold">{t(`enum.evidence.${e.category}`)}</p>
+                <p className="text-xs text-silver-700">{t('survey.evidence_times', { captured: d(e.captured_at), received: d(e.server_received_at) })}</p>
+                <p className="text-xs text-silver-700">
+                  {t('survey.evidence_source', { source: t(`enum.evidence_source.${e.source}`) })}
+                  {e.source_exception_reason ? ` — ${e.source_exception_reason}` : ''}
+                </p>
                 {e.status === 'superseded' ? (
-                  <p className="text-xs font-semibold text-warn-700">Superseded by a retake (kept for audit)</p>
+                  <p className="text-xs font-semibold text-warn-700">{t('survey.superseded')}</p>
                 ) : signed.get(e.storage_path) ? (
                   <a className="text-xs font-semibold underline" href={signed.get(e.storage_path)} target="_blank" rel="noreferrer">
-                    Open file (link expires in 5 minutes)
+                    {t('survey.open_file')}
                   </a>
                 ) : (
-                  <p className="text-xs text-silver-700">File link unavailable</p>
+                  <p className="text-xs text-silver-700">{t('survey.file_unavailable')}</p>
                 )}
               </li>
             ))}
           </ul>
         ) : (
-          <EmptyState title="No evidence yet" body="Surveyors capture photos and documents in the mobile app." />
+          <EmptyState title={t('survey.no_evidence')} body={t('survey.no_evidence_body')} />
         )}
       </Card>
 
       {canReview ? (
-        <Card title="Technical review: return for revision" className="mt-4">
+        <Card title={t('survey.review_title')} className="mt-4">
           <RequestRevisionForm surveyId={id} version={survey.version} />
-          <p className="mt-2 text-xs text-silver-700">Feasibility decisions and configuration approval are delivered in Slice 3.</p>
+          <p className="mt-2 text-xs text-silver-700">{t('survey.review_note')}</p>
         </Card>
       ) : null}
       {gpsPending ? (
-        <Card title="Review GPS / check-in exception" className="mt-4">
+        <Card title={t('survey.gps_review_title')} className="mt-4">
           <GpsReviewForm surveyId={id} />
         </Card>
       ) : null}
       {canReschedule ? (
-        <Card title="Reschedule" className="mt-4">
+        <Card title={t('survey.reschedule')} className="mt-4">
           <RescheduleForm surveyId={id} version={survey.version} surveyors={(surveyors as { id: string; full_name: string }[] | null) ?? []} minLocal={istNowLocal()} />
         </Card>
       ) : null}
       {canCancel ? (
-        <Card title="Cancel survey" className="mt-4">
+        <Card title={t('survey.cancel')} className="mt-4">
           <CancelSurveyForm surveyId={id} version={survey.version} />
         </Card>
       ) : null}
     </>
+  );
+}
+
+/** Survey observations as labelled sections (never raw JSON), in the viewer's language. */
+function Observations({ data, t }: { data: Record<string, unknown>; t: (key: string, params?: Record<string, string | number>) => string }) {
+  const label = (key: string, fallback: string) => (hasMessage(key) ? t(key) : fallback.replace(/_/g, ' '));
+  const show = (v: unknown) => (v === null || v === undefined || v === '' ? '—' : Array.isArray(v) ? v.join(', ') : typeof v === 'object' ? JSON.stringify(v) : String(v));
+  const sections = Object.entries(data).filter(([k]) => k !== 'documents_unavailable' && k !== 'critical_unknowns');
+  const docs = Object.entries((data.documents_unavailable as Record<string, string> | undefined) ?? {});
+  const unknowns = (data.critical_unknowns as string[] | undefined) ?? [];
+  if (sections.length === 0 && docs.length === 0 && unknowns.length === 0) return <p className="text-sm text-silver-700">{t('survey.no_observations')}</p>;
+  return (
+    <div className="mt-1 grid grid-cols-1 gap-3 md:grid-cols-2">
+      {sections.map(([section, fields]) => (
+        <div key={section} className="rounded bg-silver-100 p-3 text-sm">
+          <p className="font-semibold">{label(`survey.section.${section}`, section)}</p>
+          {fields && typeof fields === 'object' && !Array.isArray(fields) ? (
+            <dl className="mt-1 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
+              {Object.entries(fields as Record<string, unknown>).map(([k, v]) => (
+                <div key={k} className="contents">
+                  <dt className="text-silver-700">{label(`field.${section}.${k}`, k)}</dt>
+                  <dd>{show(v)}</dd>
+                </div>
+              ))}
+            </dl>
+          ) : (
+            <p>{show(fields)}</p>
+          )}
+        </div>
+      ))}
+      {docs.length > 0 ? (
+        <div className="rounded bg-silver-100 p-3 text-sm">
+          <p className="font-semibold">{t('survey.documents_unavailable')}</p>
+          <ul className="mt-1">
+            {docs.map(([doc, reason]) => (
+              <li key={doc}>
+                {label(`enum.evidence.${doc}`, doc)}: {reason}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+      {unknowns.length > 0 ? (
+        <div className="rounded bg-silver-100 p-3 text-sm">
+          <p className="font-semibold">{t('survey.critical_unknowns')}</p>
+          <p>{unknowns.join(', ')}</p>
+        </div>
+      ) : null}
+    </div>
   );
 }

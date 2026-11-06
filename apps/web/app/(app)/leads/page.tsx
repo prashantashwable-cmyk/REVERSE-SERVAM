@@ -1,18 +1,24 @@
 import Link from 'next/link';
-import { LEAD_STATES, fromServerError, t } from '@aiec/domain';
-import { Card, EmptyState, ErrorPanel, PageHeader, PermissionDenied, StateBadge, buttonClass, inputClass } from '@/components/ui';
+import { LEAD_STATES, fromServerError } from '@aiec/domain';
+import { Card, EmptyState, PageHeader, StateBadge, buttonClass, inputClass } from '@/components/ui';
+import { ErrorPanel, PermissionDenied } from '@/components/ui-client';
+import { getT } from '@/lib/i18n';
 import { can, getContext } from '@/lib/context';
 import { dt } from '@/lib/format';
 import { supabaseServer } from '@/lib/supabase/server';
 
-export const metadata = { title: 'Leads' };
+export async function generateMetadata() {
+  const { t } = await getT();
+  return { title: t('nav.leads') };
+}
 const PAGE_SIZE = 25;
 
 export default async function LeadsPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
+  const { t, locale } = await getT();
   const result = await getContext();
-  if (!result.ok) return <ErrorPanel error={result.error} />;
+  if (!result.ok) return <ErrorPanel code={result.error.code} />;
   const { ctx } = result;
-  if (!can(ctx, 'lead.read_all') && !can(ctx, 'lead.read_assigned')) return <PermissionDenied what="leads" />;
+  if (!can(ctx, 'lead.read_all') && !can(ctx, 'lead.read_assigned')) return <PermissionDenied whatKey="leads.what" />;
 
   const sp = await searchParams;
   const status = LEAD_STATES.includes(sp.status as never) ? sp.status! : null;
@@ -48,20 +54,20 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
   return (
     <>
       <PageHeader
-        title="Leads"
-        subtitle={can(ctx, 'lead.read_all') ? 'All leads in AIEC' : 'Leads assigned to you'}
-        actions={can(ctx, 'lead.create') ? <Link prefetch={false} className={buttonClass} href="/leads/new">New lead</Link> : null}
+        title={t('nav.leads')}
+        subtitle={can(ctx, 'lead.read_all') ? t('leads.subtitle_all') : t('leads.subtitle_mine')}
+        actions={can(ctx, 'lead.create') ? <Link prefetch={false} className={buttonClass} href="/leads/new">{t('leads.new')}</Link> : null}
       />
       <Card className="mb-4">
         <form className="flex flex-wrap items-end gap-3" role="search">
           <label className="flex flex-col gap-1 text-sm">
-            Search
-            <input className={inputClass} name="q" defaultValue={q} placeholder="Lead no., project, contact" />
+            {t('common.search')}
+            <input className={inputClass} name="q" defaultValue={q} placeholder={t('leads.search_placeholder')} />
           </label>
           <label className="flex flex-col gap-1 text-sm">
-            Status
+            {t('common.status')}
             <select className={inputClass} name="status" defaultValue={status ?? ''}>
-              <option value="">Any</option>
+              <option value="">{t('common.any')}</option>
               {LEAD_STATES.map((s) => (
                 <option key={s} value={s}>
                   {t(`lead.state.${s}`)}
@@ -71,28 +77,28 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
           </label>
           {mine ? <input type="hidden" name="mine" value="1" /> : null}
           {overdue ? <input type="hidden" name="due" value="overdue" /> : null}
-          <button className={buttonClass}>Apply</button>
-          {overdue ? <span className="text-sm text-warn-700">Showing my overdue follow-ups</span> : null}
+          <button className={buttonClass}>{t('common.apply')}</button>
+          {overdue ? <span className="text-sm text-warn-700">{t('leads.showing_overdue')}</span> : null}
         </form>
       </Card>
 
       {error ? (
-        <ErrorPanel error={fromServerError(error)} />
+        <ErrorPanel code={fromServerError(error).code} />
       ) : !data || data.length === 0 ? (
-        <EmptyState title="No leads match" body="Change the filters, or create a new lead." />
+        <EmptyState title={t('leads.empty_title')} body={t('leads.empty_body')} />
       ) : (
         <Card>
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
-              <caption className="sr-only">Leads</caption>
+              <caption className="sr-only">{t('nav.leads')}</caption>
               <thead className="text-xs uppercase text-silver-700">
                 <tr>
-                  <th className="py-2 pr-3">Lead</th>
-                  <th className="py-2 pr-3">Project / contact</th>
-                  <th className="py-2 pr-3">Location</th>
-                  <th className="py-2 pr-3">Status</th>
-                  <th className="py-2 pr-3">Score</th>
-                  <th className="py-2 pr-3">Next action</th>
+                  <th className="py-2 pr-3">{t('leads.col_lead')}</th>
+                  <th className="py-2 pr-3">{t('leads.col_project')}</th>
+                  <th className="py-2 pr-3">{t('leads.col_location')}</th>
+                  <th className="py-2 pr-3">{t('common.status')}</th>
+                  <th className="py-2 pr-3">{t('leads.col_score')}</th>
+                  <th className="py-2 pr-3">{t('leads.col_next_action')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -115,8 +121,8 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
                       </td>
                       <td className="py-2 pr-3">{l.score ?? '—'}</td>
                       <td className={`py-2 pr-3 ${late ? 'font-semibold text-crit-700' : ''}`}>
-                        {dt(l.next_action_at)}
-                        {late ? ' (overdue)' : ''}
+                        {dt(l.next_action_at, locale)}
+                        {late ? ` (${t('leads.overdue')})` : ''}
                       </td>
                     </tr>
                   );
@@ -124,13 +130,13 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
               </tbody>
             </table>
           </div>
-          <nav className="mt-4 flex items-center justify-between text-sm" aria-label="Pagination">
+          <nav className="mt-4 flex items-center justify-between text-sm" aria-label={t('common.pagination')}>
             <span className="text-silver-700">
-              {count ?? 0} lead{count === 1 ? '' : 's'} · page {page} of {totalPages}
+              {t('leads.count_pages', { count: count ?? 0, page, pages: totalPages })}
             </span>
             <span className="flex gap-3">
-              {page > 1 ? <Link prefetch={false} className="underline" href={params({ page: String(page - 1) })}>Previous</Link> : null}
-              {page < totalPages ? <Link prefetch={false} className="underline" href={params({ page: String(page + 1) })}>Next</Link> : null}
+              {page > 1 ? <Link prefetch={false} className="underline" href={params({ page: String(page - 1) })}>{t('common.previous')}</Link> : null}
+              {page < totalPages ? <Link prefetch={false} className="underline" href={params({ page: String(page + 1) })}>{t('common.next')}</Link> : null}
             </span>
           </nav>
         </Card>

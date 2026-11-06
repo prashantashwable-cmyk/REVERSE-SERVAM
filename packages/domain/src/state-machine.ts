@@ -8,7 +8,10 @@ import type { PermissionCode } from './rbac';
  */
 export interface GuardFailure {
   code: ErrorCode;
+  /** English developer message (logs/tests). UI text comes from `messageKey`. */
   message: string;
+  /** Translation key for the user-facing message. */
+  messageKey?: string;
   fields?: string[];
   missing?: string[];
 }

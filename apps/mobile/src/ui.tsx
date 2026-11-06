@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View, type TextInputProps } from 'react-native';
+import { useT } from './lib/locale';
 
 /** Field-first tokens: high outdoor contrast, large (glove-friendly) targets (§23, §58). */
 export const colors = {
@@ -66,14 +67,17 @@ export function Card({ title, children }: { title?: string; children: ReactNode 
 }
 
 export function LabeledInput({ label, required, unit, ...props }: TextInputProps & { label: string; required?: boolean; unit?: string }) {
+  const { t } = useT();
+  let a11y = unit ? t('mobile.input_a11y_unit', { label, unit }) : label;
+  if (required) a11y = t('mobile.input_a11y_required', { label: a11y });
   return (
     <View style={{ marginBottom: 12 }}>
       <Text style={styles.label}>
         {label}
-        {required ? <Text style={{ color: colors.crit }}> * (required)</Text> : null}
+        {required ? <Text style={{ color: colors.crit }}>{t('mobile.required_mark')}</Text> : null}
         {unit ? <Text style={{ color: colors.silverText }}> ({unit})</Text> : null}
       </Text>
-      <TextInput accessibilityLabel={`${label}${unit ? ` in ${unit}` : ''}${required ? ', required' : ''}`} style={styles.input} placeholderTextColor={colors.silverText} {...props} />
+      <TextInput accessibilityLabel={a11y} style={styles.input} placeholderTextColor={colors.silverText} {...props} />
     </View>
   );
 }

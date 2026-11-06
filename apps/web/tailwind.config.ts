@@ -14,7 +14,8 @@ const config: Config = {
         crit: { 50: '#fef3f2', 700: '#b42318' },
       },
       fontFamily: {
-        sans: ['Inter', 'DM Sans', 'system-ui', '-apple-system', 'Segoe UI', 'Roboto', 'sans-serif'],
+        // Devanagari faces are system fonts on Windows/Android/macOS (no download).
+        sans: ['Inter', 'DM Sans', 'system-ui', '-apple-system', 'Segoe UI', 'Roboto', 'Nirmala UI', 'Noto Sans Devanagari', 'Kohinoor Devanagari', 'sans-serif'],
       },
     },
   },

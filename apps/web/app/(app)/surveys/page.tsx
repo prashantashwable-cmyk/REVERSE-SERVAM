@@ -1,15 +1,21 @@
 import Link from 'next/link';
-import { SURVEY_STATES, fromServerError, t } from '@aiec/domain';
-import { Card, EmptyState, ErrorPanel, PageHeader, StateBadge, buttonClass, inputClass } from '@/components/ui';
+import { SURVEY_STATES, fromServerError } from '@aiec/domain';
+import { Card, EmptyState, PageHeader, StateBadge, buttonClass, inputClass } from '@/components/ui';
+import { ErrorPanel } from '@/components/ui-client';
+import { getT } from '@/lib/i18n';
 import { getContext } from '@/lib/context';
 import { dt } from '@/lib/format';
 import { supabaseServer } from '@/lib/supabase/server';
 
-export const metadata = { title: 'Surveys' };
+export async function generateMetadata() {
+  const { t } = await getT();
+  return { title: t('surveys.title') };
+}
 
 export default async function SurveysPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
+  const { t, locale } = await getT();
   const result = await getContext();
-  if (!result.ok) return <ErrorPanel error={result.error} />;
+  if (!result.ok) return <ErrorPanel code={result.error.code} />;
   const sp = await searchParams;
   const status = SURVEY_STATES.includes(sp.status as never) ? sp.status! : null;
 
@@ -24,36 +30,37 @@ export default async function SurveysPage({ searchParams }: { searchParams: Prom
 
   return (
     <>
-      <PageHeader title="Surveys" subtitle="Surveys visible to you (assigned, booked by you, or all for reviewers)." />
+      <PageHeader title={t('surveys.title')} subtitle={t('surveys.subtitle')} />
       <Card className="mb-4">
         <form className="flex flex-wrap items-end gap-3">
           <label className="flex flex-col gap-1 text-sm">
-            Status
+            {t('common.status')}
             <select name="status" defaultValue={status ?? ''} className={inputClass}>
-              <option value="">Any</option>
+              <option value="">{t('common.any')}</option>
               {SURVEY_STATES.map((s) => (
                 <option key={s} value={s}>{t(`survey.state.${s}`)}</option>
               ))}
             </select>
           </label>
-          <button className={buttonClass}>Apply</button>
+          <button className={buttonClass}>{t('common.apply')}</button>
         </form>
       </Card>
       {error ? (
-        <ErrorPanel error={fromServerError(error)} />
+        <ErrorPanel code={fromServerError(error).code} />
       ) : !data || data.length === 0 ? (
-        <EmptyState title="No surveys" body="Surveys appear here once booked from a qualified lead." />
+        <EmptyState title={t('surveys.empty_title')} body={t('surveys.empty_body')} />
       ) : (
         <Card>
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
+              <caption className="sr-only">{t('surveys.title')}</caption>
               <thead className="text-xs uppercase text-silver-700">
                 <tr>
-                  <th className="py-2 pr-3">Survey</th>
-                  <th className="py-2 pr-3">Site</th>
-                  <th className="py-2 pr-3">Appointment</th>
-                  <th className="py-2 pr-3">Status</th>
-                  <th className="py-2 pr-3">Check-in</th>
+                  <th className="py-2 pr-3">{t('surveys.col_survey')}</th>
+                  <th className="py-2 pr-3">{t('surveys.col_site')}</th>
+                  <th className="py-2 pr-3">{t('surveys.col_appointment')}</th>
+                  <th className="py-2 pr-3">{t('common.status')}</th>
+                  <th className="py-2 pr-3">{t('surveys.col_checkin')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -63,10 +70,14 @@ export default async function SurveysPage({ searchParams }: { searchParams: Prom
                       <Link prefetch={false} className="font-semibold text-navy-700 underline" href={`/surveys/${s.id}`}>{s.survey_number}</Link>
                     </td>
                     <td className="py-2 pr-3">{s.sites?.name} · {[s.sites?.locality, s.sites?.city].filter(Boolean).join(', ')}</td>
-                    <td className="py-2 pr-3">{dt(s.scheduled_start)}</td>
+                    <td className="py-2 pr-3">{dt(s.scheduled_start, locale)}</td>
                     <td className="py-2 pr-3"><StateBadge state={s.status} labelText={t(`survey.state.${s.status}`)} /></td>
                     <td className="py-2 pr-3">
-                      {s.gps_status === null ? '—' : s.gps_status === 'verified' ? 'GPS verified' : `Exception: ${s.gps_status.replace(/_/g, ' ')}${s.gps_exception_decision ? ` (${s.gps_exception_decision})` : ' (review pending)'}`}
+                      {s.gps_status === null
+                        ? '—'
+                        : s.gps_status === 'verified'
+                          ? t('surveys.gps_verified')
+                          : `${t('surveys.gps_exception', { status: t(`enum.gps.${s.gps_status}`) })} (${s.gps_exception_decision ? t(`enum.gps_decision.${s.gps_exception_decision}`) : t('surveys.review_pending')})`}
                     </td>
                   </tr>
                 ))}

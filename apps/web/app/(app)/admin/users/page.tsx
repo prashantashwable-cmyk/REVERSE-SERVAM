@@ -1,17 +1,23 @@
-import { fromServerError, t } from '@aiec/domain';
-import { Card, EmptyState, ErrorPanel, PageHeader, PermissionDenied, StateBadge } from '@/components/ui';
+import { fromServerError } from '@aiec/domain';
+import { Card, EmptyState, PageHeader, StateBadge } from '@/components/ui';
+import { ErrorPanel, PermissionDenied } from '@/components/ui-client';
+import { getT } from '@/lib/i18n';
 import { can, getContext } from '@/lib/context';
 import { phone } from '@/lib/format';
 import { supabaseServer } from '@/lib/supabase/server';
 import { CreateOrganizationForm, GrantRoleForm, RevokeRoleForm, StatusForm, type OrgOption } from './admin-forms';
 
-export const metadata = { title: 'Users & roles' };
+export async function generateMetadata() {
+  const { t } = await getT();
+  return { title: t('admin.title') };
+}
 
 export default async function AdminUsers() {
+  const { t } = await getT();
   const result = await getContext();
-  if (!result.ok) return <ErrorPanel error={result.error} />;
+  if (!result.ok) return <ErrorPanel code={result.error.code} />;
   const { ctx } = result;
-  if (!can(ctx, 'user.read')) return <PermissionDenied what="user administration" />;
+  if (!can(ctx, 'user.read')) return <PermissionDenied whatKey="admin.what" />;
   const supabase = await supabaseServer();
 
   const [profiles, userRoles, orgs] = await Promise.all([
@@ -20,7 +26,7 @@ export default async function AdminUsers() {
     supabase.from('organizations').select('id, name, kind').order('kind'),
   ]);
   const err = profiles.error ?? userRoles.error ?? orgs.error;
-  if (err) return <ErrorPanel error={fromServerError(err)} />;
+  if (err) return <ErrorPanel code={fromServerError(err).code} />;
 
   const orgList = (orgs.data ?? []) as OrgOption[];
   const orgName = new Map(orgList.map((o) => [o.id, o.name]));
@@ -29,14 +35,14 @@ export default async function AdminUsers() {
 
   return (
     <>
-      <PageHeader title="Users & roles" subtitle="Every change requires a reason and is written to the audit log." />
+      <PageHeader title={t('admin.title')} subtitle={t('admin.subtitle')} />
       {can(ctx, 'org.manage') ? (
-        <Card title="Create organization" className="mb-4">
+        <Card title={t('admin.create_org')} className="mb-4">
           <CreateOrganizationForm />
         </Card>
       ) : null}
       {!profiles.data || profiles.data.length === 0 ? (
-        <EmptyState title="No users visible" />
+        <EmptyState title={t('admin.no_users')} />
       ) : (
         <div className="flex flex-col gap-3">
           {profiles.data.map((p) => {
@@ -45,18 +51,18 @@ export default async function AdminUsers() {
               <Card key={p.id}>
                 <div className="flex flex-wrap items-start justify-between gap-2">
                   <div>
-                    <p className="font-semibold">{p.full_name ?? 'Unnamed user'}</p>
-                    <p className="text-xs text-silver-700">{[phone(p.phone_e164), p.email].filter((x) => x && x !== '—').join(' · ') || 'No contact'}</p>
-                    {p.status_reason ? <p className="text-xs text-silver-700">Status note: {p.status_reason}</p> : null}
+                    <p className="font-semibold">{p.full_name ?? t('common.unnamed_user')}</p>
+                    <p className="text-xs text-silver-700">{[phone(p.phone_e164), p.email].filter((x) => x && x !== '—').join(' · ') || t('admin.no_contact')}</p>
+                    {p.status_reason ? <p className="text-xs text-silver-700">{t('admin.status_note', { note: p.status_reason })}</p> : null}
                   </div>
-                  <StateBadge state={p.status} labelText={p.status.replace(/_/g, ' ')} />
+                  <StateBadge state={p.status} labelText={t(`enum.user_status.${p.status}`)} />
                 </div>
                 <ul className="mt-3 flex flex-col gap-2 text-sm">
-                  {mine.length === 0 ? <li className="text-silver-700">No active roles</li> : null}
+                  {mine.length === 0 ? <li className="text-silver-700">{t('admin.no_roles')}</li> : null}
                   {mine.map((r) => (
                     <li key={r.id} className="flex flex-wrap items-center justify-between gap-2 rounded bg-silver-100 px-2 py-1">
                       <span>
-                        {t(`role.${r.role_code}`)} · {orgName.get(r.organization_id) ?? 'organization'}
+                        {t(`role.${r.role_code}`)} · {orgName.get(r.organization_id) ?? t('admin.organization')}
                       </span>
                       {canAssign && p.id !== ctx.user_id ? <RevokeRoleForm userRoleId={r.id} label={t(`role.${r.role_code}`)} /> : null}
                     </li>

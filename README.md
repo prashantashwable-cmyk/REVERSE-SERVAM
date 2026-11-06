@@ -19,6 +19,19 @@ Role-based operating system for **ALL INDIA ELEVATORS COMPANY** — from enquiry
 | `apps/demo` → `docs/demo` | Static, browser-only interactive demo for phones (GitHub Pages). Real business rules from `packages/domain`, simulated data kept on the device — not the product backend |
 | `docs` | Audit, decision register, traceability matrix, permission matrix, state machines, API contracts, slice report |
 
+## Languages: Marathi first, English available
+
+Every screen in all three apps (web, Android, demo) is in **Marathi by default**, with a **मराठी / English** switch:
+
+- Web: the choice is saved to the user's profile (`set_my_locale`) and a cookie, so it also applies on the sign-in page.
+- Android and demo: the choice is saved on the device.
+
+Dates use Marathi month and day-part names with standard 0–9 digits (e.g. `06 नोव्हें, 2026, सकाळ 10:30`). Business IDs, phone numbers, units (mm/cm/m) and anything a person typed are never translated.
+
+- All text lives in `packages/domain/src/messages/en.ts` (source) and `mr.ts`. `mr.ts` is typed `Record<MessageKey, string>`, so a missing Marathi string fails the build.
+- `npm run check:i18n` (run in CI) fails if English text is written directly in a screen.
+- Terms follow [`docs/marathi-glossary.md`](docs/marathi-glossary.md).
+
 ## Security model in one paragraph
 
 Clients (web and mobile) have **read-only** table access filtered by Row Level Security. Every change goes through a `SECURITY DEFINER` RPC that authenticates, checks the permission *and* the resource scope, validates the state transition, writes an append-only audit record (with the actor's role context) and is idempotent for offline retries. Partner companies are separate tenants. Only publishable Supabase keys are used by the apps; the service-role key must never be configured in `apps/web` or `apps/mobile`.

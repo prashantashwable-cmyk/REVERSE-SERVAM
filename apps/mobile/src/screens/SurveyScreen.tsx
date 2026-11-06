@@ -2,11 +2,9 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Linking, Pressable, ScrollView, Text, View } from 'react-native';
 import {
   DEFAULT_SURVEY_REQUIREMENTS,
-  errorMessage,
-  formatDateTimeIST,
   formatPhone,
   fromServerError,
-  t,
+  hasMessage,
   toMillimetres,
   validateSurveySubmission,
   type LengthUnit,
@@ -16,79 +14,70 @@ import {
 import type { AppContextValue } from '../App';
 import { getDraft, saveDraft, type LocalDraft } from '../lib/db';
 import { cachedRequirements, cachedWorkPackage, captureEvidence, enqueueCheckIn, enqueueSimple, syncStore, type CachedSurvey } from '../lib/field';
+import { useT } from '../lib/locale';
 import { supabase } from '../lib/supabase';
 import { Banner, Button, Card, Chip, LabeledInput, colors, styles } from '../ui';
 
 /** Survey sections (§8.5). Keys match the server's allowed sections and Gate 1 paths. */
-const SECTIONS: { key: string; title: string; fields: { key: string; label: string; numeric?: boolean; hint?: string }[] }[] = [
+// Titles: survey.section.<key>; labels: field.<section>.<key>; hints: hint.<section>.<key> (when present).
+const SECTIONS: { key: string; fields: { key: string; numeric?: boolean }[] }[] = [
   {
     key: 'building',
-    title: 'Building',
     fields: [
-      { key: 'usage', label: 'Building usage', hint: 'Residential / commercial / hospital…' },
-      { key: 'floors', label: 'Floors', numeric: true },
-      { key: 'stops', label: 'Stops', numeric: true },
-      { key: 'construction_stage', label: 'Construction stage' },
-      { key: 'structural_type', label: 'Structural type' },
-      { key: 'entrances', label: 'Entrances / landings', numeric: true },
-      { key: 'existing_lift', label: 'Existing lift (if any)' },
+      { key: 'usage' },
+      { key: 'floors', numeric: true },
+      { key: 'stops', numeric: true },
+      { key: 'construction_stage' },
+      { key: 'structural_type' },
+      { key: 'entrances', numeric: true },
+      { key: 'existing_lift' },
     ],
   },
   {
     key: 'shaft',
-    title: 'Shaft',
     fields: [
-      { key: 'access_conditions', label: 'Access conditions' },
-      { key: 'verticality_observations', label: 'Verticality observations' },
-      { key: 'obstructions', label: 'Obstructions' },
+      { key: 'access_conditions' },
+      { key: 'verticality_observations' },
+      { key: 'obstructions' },
     ],
   },
   {
     key: 'machine_room',
-    title: 'Machine room / drive',
     fields: [
-      { key: 'availability', label: 'Availability', hint: 'Machine room / MRL / not decided' },
-      { key: 'location', label: 'Location' },
-      { key: 'access', label: 'Access' },
-      { key: 'ventilation', label: 'Ventilation / environment' },
+      { key: 'availability' },
+      { key: 'location' },
+      { key: 'access' },
+      { key: 'ventilation' },
     ],
   },
   {
     key: 'electrical',
-    title: 'Electrical',
     fields: [
-      { key: 'supply_type', label: 'Supply type', hint: 'Permanent / temporary / none yet' },
-      { key: 'phase', label: 'Phase', hint: 'Single / three' },
-      { key: 'voltage_measured_by_qualified_person', label: 'Voltage (only if measured by a qualified person)' },
-      { key: 'earthing', label: 'Earthing information' },
-      { key: 'supply_readiness', label: 'Supply readiness' },
+      { key: 'supply_type' },
+      { key: 'phase' },
+      { key: 'voltage_measured_by_qualified_person' },
+      { key: 'earthing' },
+      { key: 'supply_readiness' },
     ],
   },
   {
     key: 'logistics',
-    title: 'Logistics & safety',
     fields: [
-      { key: 'material_access_route', label: 'Material access route' },
-      { key: 'storage_area', label: 'Storage area' },
-      { key: 'working_hours', label: 'Working hours / restrictions' },
-      { key: 'crane_hoist', label: 'Crane / hoist requirement' },
-      { key: 'safety_hazards', label: 'Safety hazards observed' },
+      { key: 'material_access_route' },
+      { key: 'storage_area' },
+      { key: 'working_hours' },
+      { key: 'crane_hoist' },
+      { key: 'safety_hazards' },
     ],
   },
 ];
 
-const MEASUREMENT_LABELS: Record<string, string> = {
-  shaft_width: 'Shaft width',
-  shaft_depth: 'Shaft depth',
-  pit_depth: 'Pit depth',
-  overhead: 'Overhead',
-  entrance_width: 'Entrance clear width',
-  entrance_height: 'Entrance clear height',
-};
+/** Measurements shown even when not required (labels: measure.<key>). */
+const MEASUREMENT_KEYS = ['shaft_width', 'shaft_depth', 'pit_depth', 'overhead', 'entrance_width', 'entrance_height'];
 const OPTIONAL_EVIDENCE = ['machine_room', 'shaft_level', 'check_in', 'other'];
-const pretty = (s: string) => s.replace(/^doc_/, '').replace(/_/g, ' ').replace(/^./, (c) => c.toUpperCase());
 
 export function SurveyScreen({ ctx, surveyId }: { ctx: AppContextValue; surveyId: string }) {
+  const { t, field, dt } = useT();
   const [survey, setSurvey] = useState<CachedSurvey | null>(null);
   const [req, setReq] = useState<SurveyRequirements>(DEFAULT_SURVEY_REQUIREMENTS);
   const [draft, setDraft] = useState<LocalDraft | null>(null);
@@ -148,8 +137,8 @@ export function SurveyScreen({ ctx, surveyId }: { ctx: AppContextValue; surveyId
   if (!survey) {
     return (
       <View style={[styles.screen, styles.content]}>
-        <Banner tone="warn">This survey is not in your saved work. Go back and pull to refresh.</Banner>
-        <Button title="Back" kind="secondary" onPress={() => ctx.navigate({ name: 'list' })} />
+        <Banner tone="warn">{t('mobile.not_in_work')}</Banner>
+        <Button title={t('mobile.back')} kind="secondary" onPress={() => ctx.navigate({ name: 'list' })} />
       </View>
     );
   }
@@ -184,17 +173,17 @@ export function SurveyScreen({ ctx, surveyId }: { ctx: AppContextValue; surveyId
   }
 
   async function onlineAction(action: 'request_reschedule' | 'request_revisit' | 'report_inaccessible' | 'start_revision', needsReason: boolean) {
-    if (!ctx.online) return setMessage({ tone: 'warn', text: 'This action needs a network connection. Your captured work stays saved.' });
-    if (needsReason && actionReason.trim().length < 3) return setMessage({ tone: 'crit', text: 'Enter a reason first.' });
+    if (!ctx.online) return setMessage({ tone: 'warn', text: t('mobile.needs_network') });
+    if (needsReason && actionReason.trim().length < 3) return setMessage({ tone: 'crit', text: t('mobile.enter_reason') });
     await run(async () => {
       await ctx.syncNow(); // queued work first, in order
       const { error } = await supabase.rpc('survey_field_action', { p_survey_id: survey!.id, p_expected_version: survey!.version, p_action: action, p_reason: needsReason ? actionReason : null });
       if (error) {
-        const m = errorMessage(fromServerError(error).code);
-        setMessage({ tone: 'crit', text: `${m.title}. ${m.nextAction}` });
+        const code = fromServerError(error).code;
+        setMessage({ tone: 'crit', text: `${t(`error.${code}.title`)}. ${t(`error.${code}.next`)}` });
       } else {
         setActionReason('');
-        setMessage({ tone: 'ok', text: 'Done.' });
+        setMessage({ tone: 'ok', text: t('mobile.done') });
         const { refreshWorkPackage } = await import('../lib/field');
         await refreshWorkPackage(ctx.userId);
       }
@@ -205,43 +194,50 @@ export function SurveyScreen({ ctx, surveyId }: { ctx: AppContextValue; surveyId
 
   return (
     <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-      <Button title="← My surveys" kind="secondary" onPress={() => ctx.navigate({ name: 'list' })} />
+      <Button title={t('mobile.back_my_surveys')} kind="secondary" onPress={() => ctx.navigate({ name: 'list' })} />
       <Text accessibilityRole="header" style={styles.h1}>{survey.sites?.name ?? survey.survey_number}</Text>
       <View style={styles.row}>
-        <Chip text={effective === 'submit_pending' ? 'Submission waiting to sync' : t(`survey.state.${effective}`) + (effective !== survey.status ? ' (waiting to sync)' : '')} tone={effective === survey.status ? 'info' : 'warn'} />
-        {ops.length > 0 ? <Chip text={`${ops.length} change(s) not yet synced`} tone="warn" /> : null}
+        <Chip
+          text={
+            effective === 'submit_pending'
+              ? t('mobile.submission_waiting')
+              : effective !== survey.status
+                ? t('mobile.waiting_suffix', { state: t(`survey.state.${effective}`) })
+                : t(`survey.state.${effective}`)
+          } tone={effective === survey.status ? 'info' : 'warn'} />
+        {ops.length > 0 ? <Chip text={t('mobile.unsynced_changes', { count: ops.length })} tone="warn" /> : null}
       </View>
       {message ? <Banner tone={message.tone}>{message.text}</Banner> : null}
 
-      <Card title="Assignment">
+      <Card title={t('mobile.assignment')}>
         <Text style={styles.muted}>{survey.survey_number}</Text>
         <Text>{[survey.sites?.address_line, survey.sites?.locality, survey.sites?.city, survey.sites?.pincode].filter(Boolean).join(', ')}</Text>
-        <Text>{formatDateTimeIST(survey.scheduled_start)} → {formatDateTimeIST(survey.scheduled_end)}</Text>
-        <Text>Scope: {survey.scope}</Text>
-        {survey.special_instructions ? <Text>Instructions: {survey.special_instructions}</Text> : null}
+        <Text>{dt(survey.scheduled_start)} → {dt(survey.scheduled_end)}</Text>
+        <Text>{t('mobile.scope', { scope: survey.scope })}</Text>
+        {survey.special_instructions ? <Text>{t('mobile.instructions', { text: survey.special_instructions })}</Text> : null}
         <Pressable accessibilityRole="link" onPress={() => survey.site_contact_phone && Linking.openURL(`tel:${survey.site_contact_phone}`)} style={{ minHeight: 44, justifyContent: 'center' }}>
           <Text style={{ color: colors.navyLight, fontWeight: '700' }}>
-            Contact: {survey.site_contact_name} {survey.site_contact_phone ? `· ${formatPhone(survey.site_contact_phone)} (tap to call)` : ''}
+            {t('mobile.contact', { name: survey.site_contact_name })} {survey.site_contact_phone ? t('mobile.tap_to_call', { phone: formatPhone(survey.site_contact_phone) }) : ''}
           </Text>
         </Pressable>
-        {survey.status_reason ? <Banner tone="warn">Note: {survey.status_reason}</Banner> : null}
+        {survey.status_reason ? <Banner tone="warn">{t('mobile.note', { text: survey.status_reason })}</Banner> : null}
       </Card>
 
       {effective === 'scheduled' ? (
-        <Card title="Accept assignment">
-          <Button title="Accept" busy={busy} onPress={() => run(async () => { await enqueueSimple(ctx.userId, survey, 'survey.accept'); await ctx.syncNow(); })} />
-          <LabeledInput label="Reason (for reschedule)" value={actionReason} onChangeText={setActionReason} />
-          <Button title="Request reschedule" kind="secondary" onPress={() => onlineAction('request_reschedule', true)} />
+        <Card title={t('mobile.accept_assignment')}>
+          <Button title={t('mobile.accept')} busy={busy} onPress={() => run(async () => { await enqueueSimple(ctx.userId, survey, 'survey.accept'); await ctx.syncNow(); })} />
+          <LabeledInput label={t('mobile.reason_reschedule')} value={actionReason} onChangeText={setActionReason} />
+          <Button title={t('mobile.request_reschedule')} kind="secondary" onPress={() => onlineAction('request_reschedule', true)} />
         </Card>
       ) : null}
 
       {effective === 'accepted' ? (
-        <Card title="Site check-in">
-          <Text style={styles.muted}>Records your location (with accuracy), the device time and the server receipt time. If location is unavailable, explain why — a location is never invented.</Text>
-          {needsGpsReason ? <Banner tone="warn">Location not verified ({needsGpsReason.replace(/_/g, ' ')}). Enter the reason to continue.</Banner> : null}
-          {needsGpsReason ? <LabeledInput label="Why is location unavailable?" required value={gpsReason} onChangeText={setGpsReason} /> : null}
+        <Card title={t('mobile.site_checkin')}>
+          <Text style={styles.muted}>{t('mobile.checkin_intro')}</Text>
+          {needsGpsReason ? <Banner tone="warn">{t('mobile.gps_not_verified', { status: t(`enum.gps.${needsGpsReason}`) })}</Banner> : null}
+          {needsGpsReason ? <LabeledInput label={t('mobile.gps_reason')} required value={gpsReason} onChangeText={setGpsReason} /> : null}
           <Button
-            title="Check in now"
+            title={t('mobile.check_in_now')}
             busy={busy}
             onPress={() =>
               run(async () => {
@@ -254,36 +250,36 @@ export function SurveyScreen({ ctx, surveyId }: { ctx: AppContextValue; surveyId
               })
             }
           />
-          <LabeledInput label="Reason (if site inaccessible)" value={actionReason} onChangeText={setActionReason} />
-          <Button title="Report site inaccessible" kind="danger" onPress={() => onlineAction('report_inaccessible', true)} />
+          <LabeledInput label={t('mobile.reason_inaccessible')} value={actionReason} onChangeText={setActionReason} />
+          <Button title={t('mobile.report_inaccessible')} kind="danger" onPress={() => onlineAction('report_inaccessible', true)} />
         </Card>
       ) : null}
 
       {effective === 'revision_requested' ? (
-        <Card title="Revision requested">
-          <Text>Technical review returned this survey. Correct the data and resubmit; the earlier version is kept.</Text>
-          <Button title="Start revision" onPress={() => onlineAction('start_revision', false)} />
+        <Card title={t('mobile.revision_requested')}>
+          <Text>{t('mobile.revision_intro')}</Text>
+          <Button title={t('mobile.start_revision')} onPress={() => onlineAction('start_revision', false)} />
         </Card>
       ) : null}
 
       {effective === 'submitted' || effective === 'submit_pending' ? (
         <Banner tone={effective === 'submitted' ? 'ok' : 'warn'}>
-          {effective === 'submitted' ? 'Submitted and locked — awaiting technical review.' : 'Submission is saved on this device and will be sent when online. It is NOT submitted yet.'}
+          {effective === 'submitted' ? t('mobile.submitted_locked') : t('mobile.submission_saved')}
         </Banner>
       ) : null}
 
       {canEdit && draft ? (
         <>
           {SECTIONS.map((s) => (
-            <Card key={s.key} title={s.title}>
+            <Card key={s.key} title={t(`survey.section.${s.key}`)}>
               {s.fields.map((f) => {
                 const v = section(s.key)[f.key];
                 return (
                   <LabeledInput
                     key={f.key}
-                    label={f.label}
+                    label={t(`field.${s.key}.${f.key}`)}
                     required={req.required_fields.includes(`${s.key}.${f.key}`)}
-                    placeholder={f.hint ?? 'Unknown / to be confirmed'}
+                    placeholder={hasMessage(`hint.${s.key}.${f.key}`) ? t(`hint.${s.key}.${f.key}`) : t('mobile.unknown_placeholder')}
                     keyboardType={f.numeric ? 'number-pad' : 'default'}
                     value={v === null || v === undefined ? '' : String(v)}
                     onChangeText={(text) => setField(s.key, f.key, text, f.numeric)}
@@ -293,22 +289,22 @@ export function SurveyScreen({ ctx, surveyId }: { ctx: AppContextValue; surveyId
             </Card>
           ))}
 
-          <Card title="Measurements">
-            <Text style={styles.muted}>Enter each value with its unit. Stored in mm; your entered value and unit are kept. Range checks are hints, not engineering approval.</Text>
-            {[...new Set([...req.required_measurements, ...Object.keys(MEASUREMENT_LABELS)])].map((key) => {
+          <Card title={t('mobile.measurements')}>
+            <Text style={styles.muted}>{t('mobile.measurements_intro')}</Text>
+            {[...new Set([...req.required_measurements, ...MEASUREMENT_KEYS])].map((key) => {
               const m = draft.measurements.find((x) => x.key === key);
               const unit = m?.entered_unit ?? 'mm';
               return (
                 <View key={key} style={{ marginBottom: 8 }}>
                   <LabeledInput
-                    label={MEASUREMENT_LABELS[key] ?? pretty(key)}
+                    label={field(`measurement.${key}`)}
                     unit={unit}
                     required={req.required_measurements.includes(key)}
                     keyboardType="decimal-pad"
                     value={m ? String(m.entered_value) : ''}
                     onChangeText={(text) => setMeasurement(key, text)}
                   />
-                  <View style={styles.row} accessibilityRole="radiogroup" accessibilityLabel={`Unit for ${MEASUREMENT_LABELS[key] ?? key}`}>
+                  <View style={styles.row} accessibilityRole="radiogroup" accessibilityLabel={t('mobile.unit_for', { label: field(`measurement.${key}`) })}>
                     {(['mm', 'cm', 'm'] as const).map((u) => (
                       <Pressable
                         key={u}
@@ -326,22 +322,22 @@ export function SurveyScreen({ ctx, surveyId }: { ctx: AppContextValue; surveyId
             })}
           </Card>
 
-          <Card title="Photo evidence">
+          <Card title={t('mobile.photo_evidence')}>
             {[...req.required_evidence, ...OPTIONAL_EVIDENCE].map((cat) => {
               const n = evidenceRefs.filter((e) => e.category === cat).length;
               return (
                 <View key={cat} style={{ marginBottom: 8 }}>
                   <Text style={styles.label}>
-                    {pretty(cat)} {req.required_evidence.includes(cat) ? '(required)' : '(optional)'} · {n} captured
+                    {field(cat)} {req.required_evidence.includes(cat) ? t('mobile.required') : t('mobile.optional')} · {t('mobile.captured_count', { count: n })}
                   </Text>
                   <Button
-                    title={n > 0 ? 'Capture another' : 'Capture photo'}
+                    title={n > 0 ? t('mobile.capture_another') : t('mobile.capture_photo')}
                     kind={n > 0 ? 'secondary' : 'primary'}
                     busy={busy}
                     onPress={() =>
                       run(async () => {
                         const r = await captureEvidence(ctx.userId, survey, cat);
-                        if (r === 'denied') setMessage({ tone: 'crit', text: 'Camera permission is needed to capture evidence.' });
+                        if (r === 'denied') setMessage({ tone: 'crit', text: t('mobile.camera_denied') });
                         if (r === 'captured') await ctx.syncNow();
                       })
                     }
@@ -351,17 +347,17 @@ export function SurveyScreen({ ctx, surveyId }: { ctx: AppContextValue; surveyId
             })}
           </Card>
 
-          <Card title="Documents">
-            <Text style={styles.muted}>Photograph each document, or record why it is unavailable.</Text>
+          <Card title={t('mobile.documents')}>
+            <Text style={styles.muted}>{t('mobile.documents_intro')}</Text>
             {req.required_documents.map((doc) => {
               const n = evidenceRefs.filter((e) => e.category === doc).length;
               return (
                 <View key={doc} style={{ marginBottom: 10 }}>
-                  <Text style={styles.label}>{pretty(doc)} · {n} attached</Text>
-                  <Button title="Photograph document" kind="secondary" busy={busy} onPress={() => run(async () => { await captureEvidence(ctx.userId, survey, doc); await ctx.syncNow(); })} />
+                  <Text style={styles.label}>{field(doc)} · {t('mobile.attached_count', { count: n })}</Text>
+                  <Button title={t('mobile.photograph_document')} kind="secondary" busy={busy} onPress={() => run(async () => { await captureEvidence(ctx.userId, survey, doc); await ctx.syncNow(); })} />
                   {n === 0 ? (
                     <LabeledInput
-                      label="Or: why is it unavailable?"
+                      label={t('mobile.doc_unavailable')}
                       value={docUnavailable(doc)}
                       onChangeText={(text) =>
                         setDraft((d) =>
@@ -375,39 +371,39 @@ export function SurveyScreen({ ctx, surveyId }: { ctx: AppContextValue; surveyId
             })}
           </Card>
 
-          <Card title="Review and submit">
+          <Card title={t('mobile.review_submit')}>
             {validation ? (
               <>
                 <Text style={styles.muted}>
-                  Complete: {validation.completion.done} of {validation.completion.total}
+                  {t('mobile.complete_count', { done: validation.completion.done, total: validation.completion.total })}
                 </Text>
                 {validation.failures.map((f) => (
                   <Banner key={f.message} tone="crit">
-                    {f.message}: {[...(f.fields ?? []), ...(f.missing ?? [])].map((x) => pretty(x.replace(/^measurement\./, ''))).join(', ')}
+                    {f.messageKey ? t(f.messageKey) : t(`error.${f.code}.title`)}: {[...(f.fields ?? []), ...(f.missing ?? [])].map((x) => field(x)).join(', ')}
                   </Banner>
                 ))}
                 {validation.warnings.map((w) => (
-                  <Banner key={w.key} tone="warn">{w.message}</Banner>
+                  <Banner key={w.key} tone="warn">{t(w.messageKey, { ...w.params, measure: field(`measurement.${w.key}`) })}</Banner>
                 ))}
               </>
             ) : null}
             <Button
-              title="Save to server"
+              title={t('mobile.save_server')}
               kind="secondary"
               busy={busy}
               onPress={() =>
                 run(async () => {
                   await enqueueSimple(ctx.userId, survey, 'survey.save_draft', { data: draft.data, measurements: draft.measurements });
                   await ctx.syncNow();
-                  setMessage({ tone: 'ok', text: ctx.online ? 'Saved. Check the sync queue for confirmation.' : 'Saved on device; will sync when online.' });
+                  setMessage({ tone: 'ok', text: ctx.online ? t('mobile.saved_online') : t('mobile.saved_offline') });
                 })
               }
             />
             <Button
-              title="Submit survey"
+              title={t('mobile.submit_survey')}
               disabled={!validation || validation.failures.length > 0}
               busy={busy}
-              accessibilityHint="Locks this survey version and sends it for technical review"
+              accessibilityHint={t('mobile.submit_hint')}
               onPress={() =>
                 run(async () => {
                   await enqueueSimple(ctx.userId, survey, 'survey.save_draft', { data: draft.data, measurements: draft.measurements });
@@ -416,9 +412,9 @@ export function SurveyScreen({ ctx, surveyId }: { ctx: AppContextValue; surveyId
                 })
               }
             />
-            <LabeledInput label="Reason (for revisit / inaccessible)" value={actionReason} onChangeText={setActionReason} />
-            <Button title="Request revisit" kind="secondary" onPress={() => onlineAction('request_revisit', true)} />
-            <Button title="Report site inaccessible" kind="danger" onPress={() => onlineAction('report_inaccessible', true)} />
+            <LabeledInput label={t('mobile.reason_revisit')} value={actionReason} onChangeText={setActionReason} />
+            <Button title={t('mobile.request_revisit')} kind="secondary" onPress={() => onlineAction('request_revisit', true)} />
+            <Button title={t('mobile.report_inaccessible')} kind="danger" onPress={() => onlineAction('report_inaccessible', true)} />
           </Card>
         </>
       ) : null}

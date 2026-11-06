@@ -31,6 +31,8 @@ import {
   type PermissionCode,
   type RoleCode,
   type SurveyState,
+  type Locale,
+  t,
 } from '@aiec/domain';
 
 export interface DemoUser {
@@ -40,6 +42,7 @@ export interface DemoUser {
   org: string;
 }
 
+// i18n-ignore-start: fictional people and company names (data, not interface text)
 export const USERS: DemoUser[] = [
   { id: 'u-owner', name: 'Asha Kulkarni', role: 'owner', org: 'AIEC' },
   { id: 'u-sales1', name: 'Rahul Patil', role: 'sales_executive', org: 'AIEC' },
@@ -48,6 +51,7 @@ export const USERS: DemoUser[] = [
   { id: 'u-tech1', name: 'Meera Deshmukh', role: 'technical_manager', org: 'AIEC' },
   { id: 'u-partner', name: 'Sanjay More', role: 'partner_admin', org: 'Demo Partner Lifts' },
 ];
+// i18n-ignore-end
 
 export interface Lead {
   id: string;
@@ -97,7 +101,8 @@ export interface Evidence {
   category: string;
   capturedAt: string;
   thumb: string | null;
-  gps: string;
+  /** Location recorded with the photo (rendered in the viewer's language). */
+  gps: { status: 'verified' | 'permission_denied' | 'unavailable'; accuracyM: number | null };
   superseded: boolean;
 }
 
@@ -137,19 +142,25 @@ export interface AuditEntry {
   role: RoleCode;
   entity: string;
   action: string;
+  /** Free text typed by a person (never translated). */
   reason: string | null;
+  /** System-generated reason, rendered in the viewer's language. */
+  reasonKey?: string;
+  reasonParams?: Record<string, string | number>;
 }
 
 export interface Notice {
   id: string;
   to: string;
-  text: string;
+  /** Translation key + parameters: rendered in the viewer's language. */
+  key: string;
+  params: Record<string, string | number>;
   at: string;
   read: boolean;
 }
 
 export interface DemoState {
-  version: 1;
+  version: 2;
   leads: Lead[];
   activities: Activity[];
   surveys: Survey[];
@@ -158,7 +169,8 @@ export interface DemoState {
   seq: Record<string, number>;
 }
 
-const KEY = 'aiec-demo-state-v1';
+// v2: notices / audit reasons / evidence location stored as keys (Marathi + English).
+const KEY = 'aiec-demo-state-v2';
 const now = () => new Date().toISOString();
 const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
 const daysFromNow = (d: number, h = 10) => {
@@ -180,8 +192,10 @@ export function userById(id: string | null): DemoUser | undefined {
 
 /* ------------------------------- seed data -------------------------------- */
 
-function seed(): DemoState {
-  const s: DemoState = { version: 1, leads: [], activities: [], surveys: [], audit: [], notices: [], seq: {} };
+/** Descriptive seed text is written in the language the demo was started in (like data a person typed). */
+function seed(locale: Locale): DemoState {
+  const tx = (key: string) => t(key, locale);
+  const s: DemoState = { version: 2, leads: [], activities: [], surveys: [], audit: [], notices: [], seq: {} };
   const year = new Date().getFullYear();
   const mk = (over: Partial<Lead>): Lead => {
     const city = over.city ?? 'Pune';
@@ -191,16 +205,16 @@ function seed(): DemoState {
       id: uid(),
       number: formatBusinessId('lead', code, year, n),
       status: 'assigned',
-      contactName: 'Demo Contact',
+      contactName: tx('demo.seed.contact'),
       phone: null,
       email: null,
-      projectName: 'Project',
+      projectName: tx('demo.seed.project'),
       builderName: null,
       city,
       locality: null,
       lat: null,
       lng: null,
-      liftRequirement: 'One passenger lift',
+      liftRequirement: tx('demo.seed.one_lift'),
       source: 'website',
       ownerId: 'u-sales1',
       nextActionAt: daysFromNow(1),
@@ -214,14 +228,16 @@ function seed(): DemoState {
       ...over,
     };
   };
+  // i18n-ignore-start: fictional seed names
   s.leads.push(
-    mk({ contactName: 'Mr. Anil Gokhale', phone: '+919822011001', projectName: 'Sai Krupa Heights', locality: 'Kothrud', lat: 18.5074, lng: 73.8077, liftRequirement: '6-passenger MRL, G+4' }),
+    mk({ contactName: 'Mr. Anil Gokhale', phone: '+919822011001', projectName: 'Sai Krupa Heights', locality: 'Kothrud', lat: 18.5074, lng: 73.8077, liftRequirement: tx('demo.seed.mrl_g4') }),
     mk({ contactName: 'Mrs. Sunita Rao', phone: '+919822011002', projectName: 'Green Valley Society', locality: 'Baner', status: 'contacted', nextActionAt: daysFromNow(-1) }),
-    mk({ contactName: 'Builder office', phone: '+919822011003', projectName: 'Skyline Residency', builderName: 'Skyline Developers', locality: 'Wakad', city: 'PCMC', status: 'new', ownerId: null }),
-    mk({ contactName: 'Dr. Kiran Shah', phone: '+919822011004', projectName: 'Shah Clinic', locality: 'Aundh', status: 'qualified', score: 80, qualification: { need: 'Stretcher lift', decision_authority: 'confirmed', timeline: 'within_3_months', next_action: 'Book survey' } }),
-    mk({ contactName: 'Mr. Rohan Jain', phone: '+919822011005', projectName: 'Lakeview Apartments', locality: 'Hadapsar', status: 'lost', lostReason: 'price', closedReason: 'Chose cheaper vendor', ownerId: 'u-sales2' }),
+    mk({ contactName: tx('demo.seed.builder_office'), phone: '+919822011003', projectName: 'Skyline Residency', builderName: 'Skyline Developers', locality: 'Wakad', city: 'PCMC', status: 'new', ownerId: null }),
+    mk({ contactName: 'Dr. Kiran Shah', phone: '+919822011004', projectName: 'Shah Clinic', locality: 'Aundh', status: 'qualified', score: 80, qualification: { need: tx('demo.seed.stretcher_lift'), decision_authority: 'confirmed', timeline: 'within_3_months', next_action: tx('demo.seed.book_survey') } }),
+    mk({ contactName: 'Mr. Rohan Jain', phone: '+919822011005', projectName: 'Lakeview Apartments', locality: 'Hadapsar', status: 'lost', lostReason: 'price', closedReason: tx('demo.seed.cheaper_vendor'), ownerId: 'u-sales2' }),
     mk({ contactName: 'Mrs. Priya Nair', phone: '+919822011006', projectName: 'Orchid Towers', locality: 'Kharadi', ownerId: 'u-sales2' }),
   );
+  // i18n-ignore-end
   const q = s.leads[3]!;
   s.surveys.push({
     id: uid(),
@@ -231,7 +247,7 @@ function seed(): DemoState {
     status: 'scheduled',
     start: daysFromNow(1, 11),
     end: daysFromNow(1, 13),
-    scope: 'New lift site survey (shaft, pit, overhead, electrical, logistics)',
+    scope: tx('lead_form.default_scope'),
     site: `${q.projectName}, ${q.locality}, ${q.city}`,
     contactName: q.contactName,
     contactPhone: q.phone,
@@ -243,18 +259,18 @@ function seed(): DemoState {
     evidence: [],
     version: 1,
   });
-  s.audit.push({ at: now(), actor: 'System', role: 'owner', entity: 'demo', action: 'demo.seeded', reason: 'Synthetic demo data' });
+  s.audit.push({ at: now(), actor: '', role: 'owner', entity: 'demo', action: 'demo.seeded', reason: null, reasonKey: 'demo.audit.seeded' });
   return s;
 }
 
-export function load(): DemoState {
+export function load(locale: Locale): DemoState {
   try {
     const raw = localStorage.getItem(KEY);
     if (raw) return JSON.parse(raw) as DemoState;
   } catch {
     /* storage unavailable: start fresh */
   }
-  return seed();
+  return seed(locale);
 }
 
 export function save(s: DemoState): void {
@@ -265,13 +281,13 @@ export function save(s: DemoState): void {
   }
 }
 
-export function reset(): DemoState {
+export function reset(locale: Locale): DemoState {
   try {
     localStorage.removeItem(KEY);
   } catch {
     /* ignore */
   }
-  return seed();
+  return seed(locale);
 }
 
 /* --------------------------------- helpers -------------------------------- */
@@ -289,12 +305,12 @@ function check<T>(r: { ok: true; to: T } | { ok: false; error: DomainError }): T
   return r.to;
 }
 
-function audit(s: DemoState, u: DemoUser, entity: string, action: string, reason: string | null = null) {
-  s.audit.unshift({ at: now(), actor: u.name, role: u.role, entity, action, reason });
+function audit(s: DemoState, u: DemoUser, entity: string, action: string, reason: string | null = null, reasonKey?: { key: string; params?: Record<string, string | number> }) {
+  s.audit.unshift({ at: now(), actor: u.name, role: u.role, entity, action, reason, reasonKey: reasonKey?.key, reasonParams: reasonKey?.params });
 }
 
-function notify(s: DemoState, to: string | null, text: string) {
-  if (to) s.notices.unshift({ id: uid(), to, text, at: now(), read: false });
+function notify(s: DemoState, to: string | null, key: string, params: Record<string, string | number> = {}) {
+  if (to) s.notices.unshift({ id: uid(), to, key, params, at: now(), read: false });
 }
 
 /** Mirrors RLS: what a user may see. */
@@ -345,16 +361,16 @@ export function duplicateCandidates(s: DemoState, input: Pick<NewLeadInput, 'pho
 export function createLead(s: DemoState, u: DemoUser, input: NewLeadInput): Lead {
   need(u, 'lead.create');
   const missing: string[] = [];
-  if (!input.contactName.trim()) missing.push('contact name');
-  if (!input.projectName.trim()) missing.push('project name');
+  if (!input.contactName.trim()) missing.push('contact_name');
+  if (!input.projectName.trim()) missing.push('project_name');
   if (!input.city.trim()) missing.push('city');
-  if (!input.liftRequirement.trim()) missing.push('initial requirement');
+  if (!input.liftRequirement.trim()) missing.push('lift_requirement');
   if (!input.source) missing.push('source');
   const phone = normalizePhone(input.phone);
   const email = normalizeEmail(input.email);
   if (input.phone.trim() && !phone) throw new DomainError('VALIDATION_FAILED', 'phone', { fields: ['phone'] });
   if (input.email.trim() && !email) throw new DomainError('VALIDATION_FAILED', 'email', { fields: ['email'] });
-  if (!phone && !email) missing.push('phone or email');
+  if (!phone && !email) missing.push('contact_method');
   if (missing.length) throw new DomainError('REQUIRED_FIELD_MISSING', 'missing', { fields: missing });
   const dups = duplicateCandidates(s, input);
   const unreviewed = dups.filter((d) => !input.confirmSeparate.includes(d.id));
@@ -389,7 +405,7 @@ export function createLead(s: DemoState, u: DemoUser, input: NewLeadInput): Lead
     version: 1,
   };
   s.leads.unshift(lead);
-  audit(s, u, lead.number, 'lead.created', dups.length ? `Duplicates reviewed: ${input.duplicateReason}` : null);
+  audit(s, u, lead.number, 'lead.created', dups.length ? input.duplicateReason : null, dups.length ? { key: 'demo.audit.dup_reviewed' } : undefined);
   audit(s, u, lead.number, 'lead.assigned');
   return lead;
 }
@@ -397,7 +413,7 @@ export function createLead(s: DemoState, u: DemoUser, input: NewLeadInput): Lead
 function ownLead(s: DemoState, u: DemoUser, leadId: string): Lead {
   const l = s.leads.find((x) => x.id === leadId);
   if (!l || !visibleLeads(s, u).includes(l)) throw new DomainError('NOT_FOUND');
-  if (l.ownerId !== u.id) throw new DomainError('ACCESS_DENIED', 'Only the lead owner can do this');
+  if (l.ownerId !== u.id) throw new DomainError('ACCESS_DENIED', 'Only the lead owner can do this'); // i18n-ignore: developer diagnostic
   return l;
 }
 
@@ -406,8 +422,8 @@ export function recordActivity(s: DemoState, u: DemoUser, leadId: string, a: { t
   need(u, 'lead.activity.record');
   if (!['assigned', 'contacted', 'qualified'].includes(l.status)) throw new DomainError('INVALID_STATE_TRANSITION', 'closed', { currentState: l.status, allowedActions: [] });
   if (a.summary.trim().length < 2) throw new DomainError('REQUIRED_FIELD_MISSING', 'summary', { fields: ['summary'] });
-  if (!a.next && a.noActionReason.trim().length < 3) throw new DomainError('REQUIRED_FIELD_MISSING', 'next', { fields: ['next follow-up (or reason for none)'] });
-  if (a.next && istLocal(a.next).getTime() <= Date.now()) throw new DomainError('VALIDATION_FAILED', 'next', { fields: ['next follow-up must be in the future'] });
+  if (!a.next && a.noActionReason.trim().length < 3) throw new DomainError('REQUIRED_FIELD_MISSING', 'next', { fields: ['next_follow_up_at', 'no_action_reason'] });
+  if (a.next && istLocal(a.next).getTime() <= Date.now()) throw new DomainError('VALIDATION_FAILED', 'next', { fields: ['next_follow_up_at'] });
   const outcome = a.outcome || null;
   if (l.status === 'assigned' && outcome && MEANINGFUL_CONTACT_OUTCOMES.includes(outcome)) {
     l.status = check(transition(leadMachine, l.status, { action: 'record_contact', actorPermissions: perms(u), context: { outcome } }));
@@ -456,18 +472,18 @@ export function assignLead(s: DemoState, u: DemoUser, leadId: string, assigneeId
   l.ownerId = assigneeId;
   l.version++;
   audit(s, u, l.number, `lead.${action === 'assign' ? 'assigned' : action === 'reopen' ? 'reopened' : 'reassigned'}`, reason || null);
-  notify(s, assigneeId, `Lead ${l.number} (${l.projectName}) assigned to you`);
+  notify(s, assigneeId, 'demo.notice.lead_assigned', { number: l.number, project: l.projectName });
 }
 
 /* --------------------------------- surveys -------------------------------- */
 
-export function scheduleSurvey(s: DemoState, u: DemoUser, leadId: string, surveyorId: string, startLocal: string, hours: number) {
+export function scheduleSurvey(s: DemoState, u: DemoUser, leadId: string, surveyorId: string, startLocal: string, hours: number, scope: string) {
   const l = ownLead(s, u, leadId);
   need(u, 'survey.schedule');
   if (l.status !== 'qualified') throw new DomainError('INVALID_STATE_TRANSITION', 'lead must be qualified', { currentState: l.status, allowedActions: [] });
-  if (!startLocal) throw new DomainError('REQUIRED_FIELD_MISSING', 'start', { fields: ['start time'] });
+  if (!startLocal) throw new DomainError('REQUIRED_FIELD_MISSING', 'start', { fields: ['scheduled_start'] });
   const start = istLocal(startLocal);
-  if (start.getTime() < Date.now() - 3600_000) throw new DomainError('VALIDATION_FAILED', 'past', { fields: ['start time is in the past'] });
+  if (start.getTime() < Date.now() - 3600_000) throw new DomainError('VALIDATION_FAILED', 'past', { fields: ['scheduled_start'] });
   const end = new Date(start.getTime() + hours * 3600_000);
   const clash = s.surveys.some(
     (v) => v.surveyorId === surveyorId && ['scheduled', 'accepted'].includes(v.status) && Date.parse(v.start) < end.getTime() && Date.parse(v.end) > start.getTime(),
@@ -482,7 +498,7 @@ export function scheduleSurvey(s: DemoState, u: DemoUser, leadId: string, survey
     status: 'scheduled',
     start: start.toISOString(),
     end: end.toISOString(),
-    scope: 'New lift site survey (shaft, pit, overhead, electrical, logistics)',
+    scope,
     site: [l.projectName, l.locality, l.city].filter(Boolean).join(', '),
     contactName: l.contactName,
     contactPhone: l.phone,
@@ -496,7 +512,7 @@ export function scheduleSurvey(s: DemoState, u: DemoUser, leadId: string, survey
   };
   s.surveys.unshift(sv);
   audit(s, u, sv.number, 'survey.scheduled');
-  notify(s, surveyorId, `Survey ${sv.number} scheduled at ${sv.site}`);
+  notify(s, surveyorId, 'demo.notice.survey_scheduled', { number: sv.number, site: sv.site });
   return sv;
 }
 
@@ -516,7 +532,7 @@ export function surveyAction(s: DemoState, u: DemoUser, id: string, action: 'acc
   audit(s, u, v.number, `survey.${action}`, reason || null);
   if (action !== 'accept' && action !== 'start_revision') {
     const lead = s.leads.find((l) => l.id === v.leadId);
-    notify(s, lead?.ownerId ?? null, `Survey ${v.number}: ${action.replace(/_/g, ' ')} — ${reason}`);
+    notify(s, lead?.ownerId ?? null, 'demo.notice.survey_action', { number: v.number, action, reason });
   }
 }
 
@@ -546,11 +562,11 @@ export function saveDraft(s: DemoState, u: DemoUser, id: string, data: Revision[
   rev.measurements = measurements;
 }
 
-export function addEvidence(s: DemoState, u: DemoUser, id: string, category: string, thumb: string | null, gps: string) {
+export function addEvidence(s: DemoState, u: DemoUser, id: string, category: string, thumb: string | null, gps: Evidence['gps']) {
   const v = assignedSurvey(s, u, id);
   if (v.status !== 'in_progress') throw new DomainError('INVALID_STATE_TRANSITION', 'evidence', { currentState: v.status, allowedActions: [] });
   v.evidence.push({ id: uid(), category, capturedAt: now(), thumb, gps, superseded: false });
-  audit(s, u, v.number, 'evidence.registered', category);
+  audit(s, u, v.number, 'evidence.registered', null, { key: `enum.evidence.${category}` });
 }
 
 export function gate1(v: Survey) {
@@ -573,8 +589,8 @@ export function submitSurvey(s: DemoState, u: DemoUser, id: string) {
   rev.status = 'submitted';
   rev.submittedAt = now();
   v.version++;
-  audit(s, u, v.number, 'survey.submitted', `revision ${rev.no}`);
-  USERS.filter((x) => x.role === 'technical_manager').forEach((t) => notify(s, t.id, `Survey ${v.number} submitted for technical review`));
+  audit(s, u, v.number, 'survey.submitted', null, { key: 'demo.audit.revision', params: { no: rev.no } });
+  USERS.filter((x) => x.role === 'technical_manager').forEach((m) => notify(s, m.id, 'demo.notice.survey_submitted', { number: v.number }));
 }
 
 export function requestRevision(s: DemoState, u: DemoUser, id: string, reason: string) {
@@ -586,5 +602,5 @@ export function requestRevision(s: DemoState, u: DemoUser, id: string, reason: s
   v.statusReason = reason;
   v.version++;
   audit(s, u, v.number, 'survey.revision_requested', reason);
-  notify(s, v.surveyorId, `Survey ${v.number} returned for revision: ${reason}`);
+  notify(s, v.surveyorId, 'demo.notice.survey_returned', { number: v.number, reason });
 }

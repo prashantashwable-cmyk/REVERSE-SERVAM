@@ -1,10 +1,12 @@
 import { useState } from 'react';
 import { ScrollView, Text } from 'react-native';
 import { normalizePhone } from '@aiec/domain';
+import { LanguageSwitch, useT } from '../lib/locale';
 import { supabase } from '../lib/supabase';
 import { Banner, Button, Card, LabeledInput, styles } from '../ui';
 
 export function LoginScreen() {
+  const { t } = useT();
   const [phone, setPhone] = useState('');
   const [code, setCode] = useState('');
   const [sent, setSent] = useState(false);
@@ -14,38 +16,39 @@ export function LoginScreen() {
 
   async function send() {
     setMessage(null);
-    if (!e164) return setMessage('Enter a valid mobile number.');
+    if (!e164) return setMessage(t('mobile.invalid_phone'));
     setBusy(true);
     const { error } = await supabase.auth.signInWithOtp({ phone: e164 });
     setBusy(false);
-    if (error) return setMessage('Could not send the code. Check your network and try again.');
+    if (error) return setMessage(t('mobile.send_failed'));
     setSent(true);
   }
 
   async function verify() {
-    if (!e164 || !/^\d{6}$/.test(code)) return setMessage('Enter the 6-digit code.');
+    if (!e164 || !/^\d{6}$/.test(code)) return setMessage(t('mobile.enter_code'));
     setBusy(true);
     const { error } = await supabase.auth.verifyOtp({ phone: e164, token: code, type: 'sms' });
     setBusy(false);
-    if (error) setMessage('That code is incorrect or expired.');
+    if (error) setMessage(t('mobile.code_wrong'));
   }
 
   return (
     <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-      <Text style={styles.h1}>AIEC Field</Text>
-      <Text style={styles.muted}>Sign in with your registered mobile number.</Text>
+      <LanguageSwitch />
+      <Text style={styles.h1}>{t('mobile.app_name')}</Text>
+      <Text style={styles.muted}>{t('mobile.login_intro')}</Text>
       <Card>
         {!sent ? (
           <>
-            <LabeledInput label="Mobile number" required value={phone} onChangeText={setPhone} keyboardType="phone-pad" autoComplete="tel" placeholder="98765 43210" />
-            <Button title="Send code" onPress={send} busy={busy} />
+            <LabeledInput label={t('mobile.mobile_number')} required value={phone} onChangeText={setPhone} keyboardType="phone-pad" autoComplete="tel" placeholder="98765 43210" />
+            <Button title={t('mobile.send_code')} onPress={send} busy={busy} />
           </>
         ) : (
           <>
-            <Text style={styles.muted}>Code sent to {e164}</Text>
-            <LabeledInput label="6-digit code" required value={code} onChangeText={(v) => setCode(v.replace(/\D/g, ''))} keyboardType="number-pad" maxLength={6} autoComplete="sms-otp" />
-            <Button title="Verify and sign in" onPress={verify} busy={busy} />
-            <Button title="Use a different number" kind="secondary" onPress={() => setSent(false)} />
+            <Text style={styles.muted}>{t('mobile.code_sent', { phone: e164 ?? '' })}</Text>
+            <LabeledInput label={t('mobile.code')} required value={code} onChangeText={(v) => setCode(v.replace(/\D/g, ''))} keyboardType="number-pad" maxLength={6} autoComplete="sms-otp" />
+            <Button title={t('mobile.verify')} onPress={verify} busy={busy} />
+            <Button title={t('mobile.different_number')} kind="secondary" onPress={() => setSent(false)} />
           </>
         )}
       </Card>

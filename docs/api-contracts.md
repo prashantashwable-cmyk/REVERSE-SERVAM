@@ -23,6 +23,7 @@ Times are `timestamptz`; clients must send an explicit offset (the web sends IST
 |---|---|---|---|---|
 | `get_my_context()` | — | any signed-in user (also pending/suspended) | Profile, active memberships with roles, effective permissions (empty unless `active`), AIEC org id, missing onboarding fields | — |
 | `update_my_profile` | `p_full_name`, `p_preferred_locale?` (`en`/`mr`/`hi`), `p_expected_version?` | self | Name 2–120 chars | `profile.updated` |
+| `set_my_locale` | `p_locale` (`en`/`mr`/`hi`) | self, any account status (also pending) | Interface language only; returns `{preferred_locale, changed, version}`; new profiles default to `mr` | `profile.locale_changed` |
 | `admin_create_organization` | `p_kind` (not `aiec`), `p_name`, `p_legal_name`, `p_city`, `p_reason` | `org.manage` (AIEC) | Creates partner / customer / supplier / QA agency org | `organization.created` |
 | `admin_add_member` | `p_user_id`, `p_org_id`, `p_reason` | AIEC `role.assign` (any org) or `partner.team.manage` (own partner org) | Idempotent. Partner admins may only enrol users with no other active membership (`TENANT_SCOPE_VIOLATION`) | `membership.added` |
 | `admin_remove_member` | `p_user_id`, `p_org_id`, `p_reason` | as above; partner admins only for supervisor/technician members | Revokes roles + membership; history kept; last Owner protected | `membership.removed` |

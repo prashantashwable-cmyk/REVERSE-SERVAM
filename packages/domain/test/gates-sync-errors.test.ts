@@ -164,14 +164,18 @@ describe('errors, i18n, permissions', () => {
     expect(leaked.message).toBe('UNKNOWN_ERROR');
     expect(fromServerError({ message: 'permission denied for table leads', code: '42501' }).code).toBe('ACCESS_DENIED');
   });
-  it('every error code has an English title and next action', () => {
+  it('every error code has a title and next action in English and Marathi', () => {
     for (const c of ERROR_CODES) {
-      const m = errorMessage(c);
-      expect(m.title).not.toBe(`error.${c}.title`);
-      expect(m.nextAction).not.toBe(`error.${c}.next`);
+      for (const locale of ['en', 'mr'] as const) {
+        const m = errorMessage(c, locale);
+        expect(m.title).not.toBe(`error.${c}.title`);
+        expect(m.nextAction).not.toBe(`error.${c}.next`);
+      }
     }
     expect(t('missing.key')).toBe('missing.key');
-    expect(t('sync.synced', 'mr')).toBe('Synced');
+    expect(t('sync.synced', 'en')).toBe('Synced');
+    expect(t('sync.synced', 'mr')).toBe('सिंक झाले');
+    expect(t('sync.synced')).toBe('सिंक झाले'); // Marathi is the default
   });
   it('suspended users hold no permissions; QA independence', () => {
     const actor: ActorContext = { userId: 'u', accountStatus: 'suspended', assignments: [{ organizationId: 'aiec', organizationKind: 'aiec', role: 'owner' }] };

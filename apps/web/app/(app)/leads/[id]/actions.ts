@@ -1,8 +1,9 @@
 'use server';
 
-import { errorState, int, istLocalToIso, localError, str, uuid, type ActionState } from '@/lib/actions';
+import { errorState, int, istLocalToIso, localError, str, success, uuid, type ActionState } from '@/lib/actions';
 import { supabaseServer } from '@/lib/supabase/server';
 
+/** `success` is a translation key (rendered in the user's language by <FormStatus />). */
 type Rpc = { fn: string; args: Record<string, unknown>; success: string };
 
 async function run(leadId: string | null, rpc: Rpc): Promise<ActionState> {
@@ -10,7 +11,7 @@ async function run(leadId: string | null, rpc: Rpc): Promise<ActionState> {
   const supabase = await supabaseServer();
   const { error } = await supabase.rpc(rpc.fn, rpc.args);
   if (error) return errorState(error);
-  return { status: 'success', message: rpc.success };
+  return success(rpc.success);
 }
 
 export async function recordActivityAction(_: ActionState, form: FormData): Promise<ActionState> {
@@ -29,7 +30,7 @@ export async function recordActivityAction(_: ActionState, form: FormData): Prom
       p_next_follow_up_at: next,
       p_no_action_reason: str(form, 'no_action_reason'),
     },
-    success: 'Activity recorded.',
+    success: 'lead.activity_recorded',
   });
 }
 
@@ -50,7 +51,7 @@ export async function qualifyAction(_: ActionState, form: FormData): Promise<Act
       p_score_override: override,
       p_override_reason: str(form, 'override_reason'),
     },
-    success: 'Lead qualified.',
+    success: 'lead.qualified_done',
   });
 }
 
@@ -73,7 +74,7 @@ export async function scheduleSurveyAction(_: ActionState, form: FormData): Prom
       p_site_contact_name: str(form, 'site_contact_name'),
       p_site_contact_phone: str(form, 'site_contact_phone'),
     },
-    success: 'Survey booked and the surveyor notified.',
+    success: 'lead.survey_booked',
   });
 }
 
@@ -87,7 +88,7 @@ export async function closeLeadAction(_: ActionState, form: FormData): Promise<A
       p_reason: str(form, 'reason'),
       p_lost_reason: str(form, 'lost_reason'),
     },
-    success: 'Lead closed.',
+    success: 'lead.closed_done',
   });
 }
 
@@ -95,7 +96,7 @@ export async function assignLeadAction(_: ActionState, form: FormData): Promise<
   return run(uuid(form, 'lead_id'), {
     fn: 'assign_lead',
     args: { p_lead_id: uuid(form, 'lead_id'), p_assignee_id: uuid(form, 'assignee_id'), p_expected_version: int(form, 'version'), p_reason: str(form, 'reason') },
-    success: 'Lead assigned.',
+    success: 'lead.assigned_done',
   });
 }
 
@@ -103,6 +104,6 @@ export async function reopenLeadAction(_: ActionState, form: FormData): Promise<
   return run(uuid(form, 'lead_id'), {
     fn: 'reopen_lead',
     args: { p_lead_id: uuid(form, 'lead_id'), p_expected_version: int(form, 'version'), p_assignee_id: uuid(form, 'assignee_id'), p_reason: str(form, 'reason') },
-    success: 'Lead reopened.',
+    success: 'lead.reopened_done',
   });
 }
