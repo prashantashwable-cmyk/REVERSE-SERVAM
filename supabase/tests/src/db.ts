@@ -69,7 +69,7 @@ export class Session {
   rpc<T = any>(fn: string, args: Record<string, unknown> = {}): Promise<T> {
     if (!/^[a-z_]+$/.test(fn)) throw new Error('bad function name');
     const keys = Object.keys(args);
-    for (const k of keys) if (!/^p_[a-z_]+$/.test(k)) throw new Error(`bad argument name ${k}`);
+    for (const k of keys) if (!/^p_[a-z0-9_]+$/.test(k)) throw new Error(`bad argument name ${k}`);
     const values = keys.map((k) => {
       const v = args[k];
       return v !== null && typeof v === 'object' && !(v instanceof Date) ? JSON.stringify(v) : v;

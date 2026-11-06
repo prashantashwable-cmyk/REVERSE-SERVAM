@@ -44,6 +44,8 @@ export const BUSINESS_ID_PREFIXES = {
   lead: 'LD',
   survey: 'SV',
   quotation: 'QT',
+  technical_review: 'TR',
+  technical_document: 'TD',
   order: 'OR',
   task: 'TK',
   defect: 'DF',

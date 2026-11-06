@@ -301,6 +301,9 @@ export interface QuotationContext {
   validUntil?: string | null;
   now?: string;
   termsComplete?: boolean;
+  acceptedByName?: string | null;
+  acceptorAuthority?: string | null;
+  acceptanceEvidence?: string | null;
 }
 
 const notExpired = (c: QuotationContext) =>
@@ -360,6 +363,18 @@ export const quotationMachine = defineMachine<QuotationState, string, QuotationC
       guard: (c) => (c.termsComplete ? notExpired(c) : fail('REQUIRED_FIELD_MISSING', 'Scope, exclusions, tax, payment, warranty and delivery terms are required', { fields: ['terms'] })),
     },
     { action: 'accept', from: ['issued'], to: 'accepted', permission: 'customer.approval.decide', auditEvent: 'quotation.accepted', guard: notExpired },
+    {
+      // Acceptance received outside the portal (signed copy, email) and recorded by Sales with evidence (§16.4).
+      action: 'record_acceptance',
+      from: ['issued'],
+      to: 'accepted',
+      permission: 'quotation.issue',
+      auditEvent: 'quotation.accepted',
+      guard: (c) => {
+        const missing = requireFields({ accepted_by_name: c.acceptedByName, acceptor_authority: c.acceptorAuthority, acceptance_evidence: c.acceptanceEvidence });
+        return missing.length ? missing : notExpired(c);
+      },
+    },
     { action: 'record_customer_rejection', from: ['issued'], to: 'rejected_by_customer', permission: 'quotation.issue', requiresReason: true, auditEvent: 'quotation.rejected_by_customer' },
     { action: 'supersede', from: ['draft', 'pending_approval', 'approved', 'issued'], to: 'superseded', permission: 'quotation.create', auditEvent: 'quotation.superseded' },
     { action: 'expire', from: ['issued'], to: 'expired', permission: 'quotation.issue', auditEvent: 'quotation.expired' },

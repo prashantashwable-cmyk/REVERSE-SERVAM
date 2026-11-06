@@ -5,6 +5,7 @@ export * from './identity';
 export * from './state-machine';
 export * from './machines';
 export * from './survey';
+export * from './technical';
 export * from './duplicates';
 export * from './commercial';
 export * from './gates';
