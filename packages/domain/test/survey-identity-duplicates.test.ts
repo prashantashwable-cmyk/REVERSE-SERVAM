@@ -154,3 +154,15 @@ describe('duplicate detection', () => {
     ]);
   });
 });
+
+import { DEFAULT_LEAD_SCORING, scoreLead } from '../src';
+
+describe('lead scoring', () => {
+  it('is transparent and capped', () => {
+    const r = scoreLead({ need: 'New lift for G+4', decision_authority: 'confirmed', budget_readiness: 'exploring', timeline: 'within_3_months', number_of_lifts: 1 });
+    expect(r.score).toBe(70);
+    expect(r.explanation.filter((e) => e.matched).map((e) => e.key)).toEqual(['need', 'decision_authority', 'timeline', 'number_of_lifts']);
+    expect(scoreLead({ need: '  ' }).score).toBe(0);
+    expect(scoreLead({ need: 'x', number_of_lifts: 2 }, { ...DEFAULT_LEAD_SCORING, max: 25 }).score).toBe(25);
+  });
+});

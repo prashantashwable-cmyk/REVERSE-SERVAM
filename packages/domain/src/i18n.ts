@@ -27,6 +27,7 @@ const ERROR_EN: Record<ErrorCode, [string, string]> = {
   REVISION_CONFLICT: ['Someone else changed this record', 'Review both versions and choose how to resolve the conflict.'],
   DUPLICATE_OPERATION: ['This action was already received', 'No further action is needed.'],
   SCHEDULE_CONFLICT: ['Time slot not available', 'Choose another time; the person is already booked.'],
+  DUPLICATE_REVIEW_REQUIRED: ['Possible duplicate found', 'Review the matching records: open the existing one, or confirm this is a separate opportunity with a reason.'],
   NOT_FOUND: ['Record not found', 'It may have been removed from your access. Refresh your list.'],
   OFFLINE_SYNC_REQUIRED: ['You are offline', 'This will be sent automatically when you are back online.'],
   FILE_UPLOAD_FAILED: ['File upload failed', 'It will retry automatically; keep the app open on a network.'],
