@@ -128,6 +128,17 @@ describe('Slice 1 — identity, role context and RBAC', () => {
     await expectCode(admin(pool, `delete from public.business_rules where rule_key = 'gps.check_in'`), 'ACCESS_DENIED');
   });
 
+  it('assignment pickers expose only id and name of active, capable people', async () => {
+    const surveyors = await as('sales1').rpc<{ id: string; full_name: string }[]>('list_assignable_users', { p_purpose: 'surveyor' });
+    expect(surveyors.map((s) => s.id).sort()).toEqual([fx.users.surveyor1, fx.users.surveyor2].sort());
+    expect(Object.keys(surveyors[0]!).sort()).toEqual(['full_name', 'id']);
+    const owners = await as('owner').rpc<{ id: string }[]>('list_assignable_users', { p_purpose: 'lead_owner' });
+    expect(owners.map((s) => s.id).sort()).toEqual([fx.users.sales1, fx.users.sales2].sort());
+    await expectCode(as('sales1').rpc('list_assignable_users', { p_purpose: 'lead_owner' }), 'ACCESS_DENIED');
+    await expectCode(as('partnerA_admin').rpc('list_assignable_users', { p_purpose: 'surveyor' }), 'ACCESS_DENIED');
+    await expectCode(as('owner').rpc('list_assignable_users', { p_purpose: 'everyone' }), 'VALIDATION_FAILED');
+  });
+
   it('profile updates use optimistic concurrency', async () => {
     const ctx = await as('sales2').rpc('get_my_context');
     await as('sales2').rpc('update_my_profile', { p_full_name: 'Sales Two', p_preferred_locale: 'mr', p_expected_version: ctx.profile.version });
