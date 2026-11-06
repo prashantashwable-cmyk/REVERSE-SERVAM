@@ -16,6 +16,7 @@ Role-based operating system for **ALL INDIA ELEVATORS COMPANY** — from enquiry
 | `e2e` | Browser walkthrough of the production web build across roles, with screenshots (test-only gateway; see `e2e/README.md`) |
 | `apps/web` | Next.js 15 management web (Owner, Sales, Technical, Operations, administration) |
 | `apps/mobile` | Expo SDK 58 Android field app (Surveyor; offline-first) |
+| `apps/demo` → `docs/demo` | Static, browser-only interactive demo for phones (GitHub Pages). Real business rules from `packages/domain`, simulated data kept on the device — not the product backend |
 | `docs` | Audit, decision register, traceability matrix, permission matrix, state machines, API contracts, slice report |
 
 ## Security model in one paragraph

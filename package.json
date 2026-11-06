@@ -6,13 +6,15 @@
     "packages/*",
     "apps/web",
     "apps/mobile",
+    "apps/demo",
     "supabase/tests"
   ],
   "scripts": {
     "test": "npm run test --workspace @aiec/domain",
     "test:db": "npm run test:db --workspace @aiec/db-tests",
     "typecheck": "npm run typecheck --workspaces --if-present",
-    "build:web": "npm run build --workspace @aiec/web"
+    "build:web": "npm run build --workspace @aiec/web",
+    "build:demo": "npm run build --workspace @aiec/demo"
   },
   "engines": {
     "node": ">=20.11"

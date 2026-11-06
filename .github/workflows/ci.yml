@@ -46,3 +46,5 @@ jobs:
         run: npm run build:web
       - name: Mobile unit tests
         run: npm test --workspace @aiec/mobile
+      - name: GitHub Pages demo builds
+        run: npm run build:demo
