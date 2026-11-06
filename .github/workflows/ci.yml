@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      AIEC_TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres
+      NEXT_TELEMETRY_DISABLED: '1'
+      EXPO_NO_TELEMETRY: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Domain unit tests
+        run: npm test
+      - name: Database integration tests (RLS, tenant isolation, workflows)
+        run: npm run test:db
+      - name: Typecheck all workspaces
+        run: npm run typecheck
+      - name: Web unit tests
+        run: npm test --workspace @aiec/web
+      - name: Web production build
+        run: npm run build:web
+      - name: Mobile unit tests
+        run: npm test --workspace @aiec/mobile

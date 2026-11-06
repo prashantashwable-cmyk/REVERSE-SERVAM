@@ -11,10 +11,12 @@
   },
   "scripts": {
     "test": "vitest run",
-    "typecheck": "tsc --noEmit -p tsconfig.json"
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "docs:generate": "tsx scripts/generate-docs.ts"
   },
   "devDependencies": {
     "typescript": "5.9.3",
-    "vitest": "3.2.4"
+    "vitest": "3.2.4",
+    "tsx": "4.20.3"
   }
 }
