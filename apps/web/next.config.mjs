@@ -3,6 +3,9 @@ const nextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
   transpilePackages: ['@aiec/domain'],
+  // All metadata is static: render it in <head> for every client instead of streaming it
+  // through a Suspense outlet (removes a hydration-timing variable seen in E2E runs).
+  htmlLimitedBots: /.*/,
   async headers() {
     return [
       {

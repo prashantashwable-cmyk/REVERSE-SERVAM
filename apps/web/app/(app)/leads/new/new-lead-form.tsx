@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useActionState } from 'react';
+import { useActionState, useEffect } from 'react';
 import { FormStatus, SubmitButton } from '@/components/forms';
 import { Card, Field, inputClass } from '@/components/ui';
 import { createLeadAction } from './actions';
@@ -13,6 +13,11 @@ const pretty = (s: string) => s.replace(/_/g, ' ').replace(/^./, (c) => c.toUppe
 
 export function NewLeadForm({ operationId }: { operationId: string }) {
   const [state, action] = useActionState(createLeadAction, INITIAL_NEW_LEAD);
+  useEffect(() => {
+    // Full navigation: a client router.push() issued right after a server action was
+    // observed (E2E, Next 15.5) to be aborted about half the time.
+    if (state.createdLeadId) window.location.assign(`/leads/${state.createdLeadId}?created=1`);
+  }, [state.createdLeadId]);
   const v = state.values;
   const invalid = (f: string) => state.result.status === 'error' && state.result.fields.some((x) => x === f || x.endsWith(`.${f}`));
   const input = (name: string, props: React.InputHTMLAttributes<HTMLInputElement> = {}) => (
@@ -47,7 +52,7 @@ export function NewLeadForm({ operationId }: { operationId: string }) {
                     {c.can_open ? (
                       <>
                         {' · '}
-                        <Link href={`/leads/${c.lead_id}`} className="underline">
+                        <Link prefetch={false} href={`/leads/${c.lead_id}`} className="underline">
                           Open
                         </Link>
                       </>
@@ -139,7 +144,11 @@ export function NewLeadForm({ operationId }: { operationId: string }) {
 
       <FormStatus state={state.result} />
       <div>
-        <SubmitButton>{state.candidates.length > 0 ? 'Confirm and create lead' : 'Create lead'}</SubmitButton>
+        {state.createdLeadId ? (
+          <p role="status" className="text-sm text-ok-700">Lead created — opening it…</p>
+        ) : (
+          <SubmitButton>{state.candidates.length > 0 ? 'Confirm and create lead' : 'Create lead'}</SubmitButton>
+        )}
       </div>
     </form>
   );

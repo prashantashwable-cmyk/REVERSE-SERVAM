@@ -48,7 +48,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
           </div>
           <nav aria-label="Main" className="flex gap-1 overflow-x-auto px-2 pb-2 md:flex-col md:overflow-visible">
             {items.map((n) => (
-              <Link key={n.href} href={n.href} className="whitespace-nowrap rounded-md px-3 py-2 text-sm text-silver-200 hover:bg-navy-700 hover:text-white">
+              <Link prefetch={false} key={n.href} href={n.href} className="whitespace-nowrap rounded-md px-3 py-2 text-sm text-silver-200 hover:bg-navy-700 hover:text-white">
                 {n.label}
               </Link>
             ))}

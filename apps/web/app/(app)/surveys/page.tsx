@@ -60,7 +60,7 @@ export default async function SurveysPage({ searchParams }: { searchParams: Prom
                 {data.map((s: any) => (
                   <tr key={s.id} className="border-t border-silver-200">
                     <td className="py-2 pr-3 font-mono text-xs">
-                      <Link className="font-semibold text-navy-700 underline" href={`/surveys/${s.id}`}>{s.survey_number}</Link>
+                      <Link prefetch={false} className="font-semibold text-navy-700 underline" href={`/surveys/${s.id}`}>{s.survey_number}</Link>
                     </td>
                     <td className="py-2 pr-3">{s.sites?.name} · {[s.sites?.locality, s.sites?.city].filter(Boolean).join(', ')}</td>
                     <td className="py-2 pr-3">{dt(s.scheduled_start)}</td>

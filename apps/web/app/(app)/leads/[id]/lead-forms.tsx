@@ -2,7 +2,7 @@
 
 import { useActionState, useState } from 'react';
 import { CALL_OUTCOMES, LOST_REASONS } from '@aiec/domain';
-import { FormStatus, SubmitButton } from '@/components/forms';
+import { FormStatus, SubmitButton, useRefreshOnSuccess } from '@/components/forms';
 import { Field, inputClass, secondaryButtonClass } from '@/components/ui';
 import { IDLE } from '@/lib/actions';
 import { assignLeadAction, closeLeadAction, qualifyAction, recordActivityAction, reopenLeadAction, scheduleSurveyAction } from './actions';
@@ -16,6 +16,7 @@ interface Base {
 
 export function ActivityForm({ leadId, operationId, nowLocal }: { leadId: string; operationId: string; nowLocal: string }) {
   const [state, action] = useActionState(recordActivityAction, IDLE);
+  useRefreshOnSuccess(state);
   return (
     <form action={action} className="grid grid-cols-1 gap-3 md:grid-cols-2" noValidate>
       <input type="hidden" name="lead_id" value={leadId} />
@@ -57,6 +58,7 @@ export function ActivityForm({ leadId, operationId, nowLocal }: { leadId: string
 
 export function QualifyForm({ leadId, version, current }: Base & { current: Record<string, string> | null }) {
   const [state, action] = useActionState(qualifyAction, IDLE);
+  useRefreshOnSuccess(state);
   const [override, setOverride] = useState(false);
   const c = current ?? {};
   const sel = (name: string, label: string, options: string[], required = false) => (
@@ -123,6 +125,7 @@ export function ScheduleSurveyForm({ leadId, operationId, surveyors, defaultCont
   minLocal: string;
 }) {
   const [state, action] = useActionState(scheduleSurveyAction, IDLE);
+  useRefreshOnSuccess(state);
   return (
     <form action={action} className="grid grid-cols-1 gap-3 md:grid-cols-2" noValidate>
       <input type="hidden" name="lead_id" value={leadId} />
@@ -163,6 +166,7 @@ export function ScheduleSurveyForm({ leadId, operationId, surveyors, defaultCont
 
 export function CloseLeadForm({ leadId, version }: Base) {
   const [state, action] = useActionState(closeLeadAction, IDLE);
+  useRefreshOnSuccess(state);
   const [outcome, setOutcome] = useState('lost');
   return (
     <form action={action} className="grid grid-cols-1 gap-3 md:grid-cols-2" noValidate>
@@ -197,6 +201,7 @@ export function CloseLeadForm({ leadId, version }: Base) {
 
 export function AssignForm({ leadId, version, owners, mode }: Base & { owners: { id: string; full_name: string }[]; mode: 'assign' | 'reassign' | 'reopen' }) {
   const [state, action] = useActionState(mode === 'reopen' ? reopenLeadAction : assignLeadAction, IDLE);
+  useRefreshOnSuccess(state);
   return (
     <form action={action} className="grid grid-cols-1 gap-3 md:grid-cols-2" noValidate>
       <input type="hidden" name="lead_id" value={leadId} />

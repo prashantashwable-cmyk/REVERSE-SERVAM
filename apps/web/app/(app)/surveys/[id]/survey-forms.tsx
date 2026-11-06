@@ -1,13 +1,14 @@
 'use client';
 
 import { useActionState } from 'react';
-import { FormStatus, SubmitButton } from '@/components/forms';
+import { FormStatus, SubmitButton, useRefreshOnSuccess } from '@/components/forms';
 import { Field, inputClass } from '@/components/ui';
 import { IDLE } from '@/lib/actions';
 import { cancelAction, requestRevisionAction, rescheduleAction, reviewGpsAction } from './actions';
 
 export function RequestRevisionForm({ surveyId, version }: { surveyId: string; version: number }) {
   const [state, action] = useActionState(requestRevisionAction, IDLE);
+  useRefreshOnSuccess(state);
   return (
     <form action={action} className="flex flex-col gap-3" noValidate>
       <input type="hidden" name="survey_id" value={surveyId} />
@@ -23,6 +24,7 @@ export function RequestRevisionForm({ surveyId, version }: { surveyId: string; v
 
 export function GpsReviewForm({ surveyId }: { surveyId: string }) {
   const [state, action] = useActionState(reviewGpsAction, IDLE);
+  useRefreshOnSuccess(state);
   return (
     <form action={action} className="flex flex-col gap-3" noValidate>
       <input type="hidden" name="survey_id" value={surveyId} />
@@ -44,6 +46,7 @@ export function GpsReviewForm({ surveyId }: { surveyId: string }) {
 
 export function RescheduleForm({ surveyId, version, surveyors, minLocal }: { surveyId: string; version: number; surveyors: { id: string; full_name: string }[]; minLocal: string }) {
   const [state, action] = useActionState(rescheduleAction, IDLE);
+  useRefreshOnSuccess(state);
   return (
     <form action={action} className="grid grid-cols-1 gap-3 md:grid-cols-2" noValidate>
       <input type="hidden" name="survey_id" value={surveyId} />
@@ -75,6 +78,7 @@ export function RescheduleForm({ surveyId, version, surveyors, minLocal }: { sur
 
 export function CancelSurveyForm({ surveyId, version }: { surveyId: string; version: number }) {
   const [state, action] = useActionState(cancelAction, IDLE);
+  useRefreshOnSuccess(state);
   return (
     <form action={action} className="flex flex-col gap-3" noValidate>
       <input type="hidden" name="survey_id" value={surveyId} />

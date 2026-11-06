@@ -108,7 +108,7 @@ export default async function LeadDetail({ params, searchParams }: { params: Pro
           <ul className="text-sm">
             {surveys.map((s) => (
               <li key={s.id} className="flex flex-wrap items-center gap-2 border-t border-silver-200 py-2 first:border-0">
-                <Link className="font-mono font-semibold underline" href={`/surveys/${s.id}`}>{s.survey_number}</Link>
+                <Link prefetch={false} className="font-mono font-semibold underline" href={`/surveys/${s.id}`}>{s.survey_number}</Link>
                 <StateBadge state={s.status} labelText={t(`survey.state.${s.status}`)} />
                 <span className="text-silver-700">{dt(s.scheduled_start)}</span>
               </li>

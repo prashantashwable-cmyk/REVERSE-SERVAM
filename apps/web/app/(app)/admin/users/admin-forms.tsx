@@ -2,7 +2,7 @@
 
 import { useActionState } from 'react';
 import { ROLE_CODES, ROLE_ORG_KINDS, t } from '@aiec/domain';
-import { FormStatus, SubmitButton } from '@/components/forms';
+import { FormStatus, SubmitButton, useRefreshOnSuccess } from '@/components/forms';
 import { Field, inputClass, secondaryButtonClass } from '@/components/ui';
 import { IDLE } from '@/lib/actions';
 import { createOrganizationAction, grantRoleAction, revokeRoleAction, setStatusAction } from './actions';
@@ -15,6 +15,7 @@ export interface OrgOption {
 
 export function GrantRoleForm({ userId, orgs }: { userId: string; orgs: OrgOption[] }) {
   const [state, action] = useActionState(grantRoleAction, IDLE);
+  useRefreshOnSuccess(state);
   return (
     <form action={action} className="grid grid-cols-1 gap-2 md:grid-cols-4" noValidate>
       <input type="hidden" name="user_id" value={userId} />
@@ -47,6 +48,7 @@ export function GrantRoleForm({ userId, orgs }: { userId: string; orgs: OrgOptio
 
 export function RevokeRoleForm({ userRoleId, label }: { userRoleId: string; label: string }) {
   const [state, action] = useActionState(revokeRoleAction, IDLE);
+  useRefreshOnSuccess(state);
   return (
     <form action={action} className="flex flex-wrap items-end gap-2" noValidate>
       <input type="hidden" name="user_role_id" value={userRoleId} />
@@ -62,6 +64,7 @@ export function RevokeRoleForm({ userRoleId, label }: { userRoleId: string; labe
 
 export function StatusForm({ userId, current }: { userId: string; current: string }) {
   const [state, action] = useActionState(setStatusAction, IDLE);
+  useRefreshOnSuccess(state);
   return (
     <form action={action} className="flex flex-wrap items-end gap-2" noValidate>
       <input type="hidden" name="user_id" value={userId} />
@@ -85,6 +88,7 @@ export function StatusForm({ userId, current }: { userId: string; current: strin
 
 export function CreateOrganizationForm() {
   const [state, action] = useActionState(createOrganizationAction, IDLE);
+  useRefreshOnSuccess(state);
   return (
     <form action={action} className="grid grid-cols-1 gap-3 md:grid-cols-3" noValidate>
       <Field label="Type" htmlFor="org_kind" required>

@@ -1,7 +1,6 @@
 'use client';
 
 import { createBrowserClient } from '@supabase/ssr';
-import { useRouter } from 'next/navigation';
 import { useMemo, useState } from 'react';
 import { normalizePhone } from '@aiec/domain';
 import { buttonClass, inputClass, secondaryButtonClass } from '@/components/ui';
@@ -11,7 +10,6 @@ type Step = 'enter' | 'verify' | 'email_sent';
 
 export function LoginForm({ supabaseUrl, supabaseAnonKey, next }: { supabaseUrl: string; supabaseAnonKey: string; next: string }) {
   const supabase = useMemo(() => createBrowserClient(supabaseUrl, supabaseAnonKey), [supabaseUrl, supabaseAnonKey]);
-  const router = useRouter();
   const [mode, setMode] = useState<Mode>('phone');
   const [step, setStep] = useState<Step>('enter');
   const [phone, setPhone] = useState('');
@@ -53,8 +51,9 @@ export function LoginForm({ supabaseUrl, supabaseAnonKey, next }: { supabaseUrl:
     const { error } = await supabase.auth.verifyOtp({ phone: e164, token: code, type: 'sms' });
     setBusy(false);
     if (error) return setMessage('That code is incorrect or expired.');
-    router.replace(next);
-    router.refresh();
+    // Full page load after an auth change: the server (middleware + RSC) must see the
+    // new session cookie, and overlapping client transitions are avoided.
+    window.location.assign(next);
   }
 
   return (

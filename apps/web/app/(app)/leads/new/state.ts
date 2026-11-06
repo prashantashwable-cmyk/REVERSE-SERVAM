@@ -19,6 +19,8 @@ export interface NewLeadState {
   values: Record<string, string>;
   candidates: DuplicateCandidate[];
   attempt: number;
+  /** Set once the lead exists; the form then navigates to it. */
+  createdLeadId?: string;
 }
 
 export const INITIAL_NEW_LEAD: NewLeadState = { result: IDLE, values: {}, candidates: [], attempt: 0 };

@@ -91,7 +91,7 @@ export function PermissionDenied({ what }: { what: string }) {
     <div role="alert" className="rounded-lg border border-warn-700/30 bg-warn-50 p-6 text-warn-700">
       <p className="font-semibold">You do not have access to {what}.</p>
       <p className="mt-1 text-sm">If your work needs it, ask an administrator to review your role assignment.</p>
-      <Link href="/" className="mt-3 inline-block text-sm font-medium underline">
+      <Link prefetch={false} href="/" className="mt-3 inline-block text-sm font-medium underline">
         Back to home
       </Link>
     </div>

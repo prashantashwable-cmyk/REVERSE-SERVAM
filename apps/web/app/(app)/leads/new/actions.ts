@@ -1,6 +1,5 @@
 'use server';
 
-import { redirect } from 'next/navigation';
 import { normalizePhone } from '@aiec/domain';
 import { errorState, localError, str, uuid, type ActionState } from '@/lib/actions';
 import type { DuplicateCandidate, NewLeadState } from './state';
@@ -66,5 +65,7 @@ export async function createLeadAction(prev: NewLeadState, form: FormData): Prom
     const candidates = state.status === 'error' && Array.isArray(state.details.candidates) ? (state.details.candidates as DuplicateCandidate[]) : [];
     return next(state, candidates);
   }
-  redirect(`/leads/${(data as { lead_id: string }).lead_id}?created=1`);
+  // Navigation happens on the client (see new-lead-form.tsx): a server-action redirect was
+  // observed not to navigate reliably (Next 15.5, verified in E2E).
+  return { ...next({ status: 'success', message: 'Lead created.' }), createdLeadId: (data as { lead_id: string }).lead_id };
 }

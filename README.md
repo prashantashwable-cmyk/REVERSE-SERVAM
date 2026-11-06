@@ -13,6 +13,7 @@ Role-based operating system for **ALL INDIA ELEVATORS COMPANY** — from enquiry
 | `packages/domain` | Framework-free TypeScript business rules shared everywhere: roles & permissions, 13 state machines, INR money, quotation economics, payment gates, survey Gate 1, duplicate scoring, partner/safety/handover gates, offline sync queue, i18n keys |
 | `supabase/migrations` | PostgreSQL schema, Row Level Security, RPCs (all writes), triggers, seeds |
 | `supabase/tests` | Integration tests on a real PostgreSQL + PostGIS database (RLS, tenant isolation, workflows, audit, idempotency) |
+| `e2e` | Browser walkthrough of the production web build across roles, with screenshots (test-only gateway; see `e2e/README.md`) |
 | `apps/web` | Next.js 15 management web (Owner, Sales, Technical, Operations, administration) |
 | `apps/mobile` | Expo SDK 58 Android field app (Surveyor; offline-first) |
 | `docs` | Audit, decision register, traceability matrix, permission matrix, state machines, API contracts, slice report |

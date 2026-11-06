@@ -1,6 +1,5 @@
 'use server';
 
-import { revalidatePath } from 'next/cache';
 import { errorState, int, istLocalToIso, localError, str, uuid, type ActionState } from '@/lib/actions';
 import { supabaseServer } from '@/lib/supabase/server';
 
@@ -9,7 +8,6 @@ async function call(surveyId: string | null, fn: string, args: Record<string, un
   const supabase = await supabaseServer();
   const { error } = await supabase.rpc(fn, args);
   if (error) return errorState(error);
-  revalidatePath(`/surveys/${surveyId}`);
   return { status: 'success', message: success };
 }
 

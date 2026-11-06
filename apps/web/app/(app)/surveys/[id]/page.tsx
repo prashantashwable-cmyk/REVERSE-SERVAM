@@ -80,7 +80,7 @@ export default async function SurveyDetail({ params }: { params: Promise<{ id: s
       <Card title={current ? `Revision ${current.revision_no} (${current.status})` : 'Survey data'} className="mt-4">
         {current ? (
           <>
-            {current.revision_reason ? <p className="mb-2 text-sm text-warn-700">Revision requested: {current.revision_reason}</p> : null}
+            {current.revision_reason ? <p className="mb-2 text-sm text-warn-700">Reason for this revision: {current.revision_reason}</p> : null}
             <h3 className="text-sm font-semibold">Measurements (normalized to mm; entered value preserved)</h3>
             {current.survey_measurements?.length ? (
               <table className="mt-2 w-full text-left text-sm">

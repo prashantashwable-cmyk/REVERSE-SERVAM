@@ -50,7 +50,7 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
       <PageHeader
         title="Leads"
         subtitle={can(ctx, 'lead.read_all') ? 'All leads in AIEC' : 'Leads assigned to you'}
-        actions={can(ctx, 'lead.create') ? <Link className={buttonClass} href="/leads/new">New lead</Link> : null}
+        actions={can(ctx, 'lead.create') ? <Link prefetch={false} className={buttonClass} href="/leads/new">New lead</Link> : null}
       />
       <Card className="mb-4">
         <form className="flex flex-wrap items-end gap-3" role="search">
@@ -101,7 +101,7 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
                   return (
                     <tr key={l.id} className="border-t border-silver-200">
                       <td className="py-2 pr-3 font-mono text-xs">
-                        <Link className="font-semibold text-navy-700 underline" href={`/leads/${l.id}`}>
+                        <Link prefetch={false} className="font-semibold text-navy-700 underline" href={`/leads/${l.id}`}>
                           {l.lead_number}
                         </Link>
                       </td>
@@ -129,8 +129,8 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
               {count ?? 0} lead{count === 1 ? '' : 's'} · page {page} of {totalPages}
             </span>
             <span className="flex gap-3">
-              {page > 1 ? <Link className="underline" href={params({ page: String(page - 1) })}>Previous</Link> : null}
-              {page < totalPages ? <Link className="underline" href={params({ page: String(page + 1) })}>Next</Link> : null}
+              {page > 1 ? <Link prefetch={false} className="underline" href={params({ page: String(page - 1) })}>Previous</Link> : null}
+              {page < totalPages ? <Link prefetch={false} className="underline" href={params({ page: String(page + 1) })}>Next</Link> : null}
             </span>
           </nav>
         </Card>

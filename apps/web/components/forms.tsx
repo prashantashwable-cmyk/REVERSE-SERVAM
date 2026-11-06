@@ -1,8 +1,22 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
+import { useEffect } from 'react';
 import { useFormStatus } from 'react-dom';
 import type { ActionState } from '@/lib/actions';
 import { buttonClass } from './ui';
+
+/**
+ * Refresh server-rendered data after a successful action. Done on the client,
+ * outside the action transition: calling revalidatePath() inside the action was
+ * observed (Next 15.5, E2E) to leave the form stuck in its pending state.
+ */
+export function useRefreshOnSuccess(state: ActionState) {
+  const router = useRouter();
+  useEffect(() => {
+    if (state.status === 'success') router.refresh();
+  }, [state, router]);
+}
 
 /** Disabled while submitting: prevents duplicate submissions (§34 loading state). */
 export function SubmitButton({ children, className = buttonClass }: { children: React.ReactNode; className?: string }) {

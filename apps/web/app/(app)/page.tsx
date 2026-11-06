@@ -69,7 +69,7 @@ export default async function Home() {
       ) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {kpis.map((k) => (
-            <Link key={k.label} href={k.href} className="group rounded-lg border border-silver-200 bg-white p-4 shadow-sm hover:border-navy-600">
+            <Link prefetch={false} key={k.label} href={k.href} className="group rounded-lg border border-silver-200 bg-white p-4 shadow-sm hover:border-navy-600">
               <p className="text-sm text-silver-700">{k.label}</p>
               <p className="mt-1 text-3xl font-semibold text-navy-900">{k.count === null ? '—' : k.count}</p>
               <p className="mt-2 text-xs text-silver-700">
@@ -81,7 +81,7 @@ export default async function Home() {
       )}
       {can(ctx, 'lead.create') ? (
         <p className="mt-6">
-          <Link href="/leads/new" className="text-sm font-semibold text-navy-700 underline">
+          <Link prefetch={false} href="/leads/new" className="text-sm font-semibold text-navy-700 underline">
             + Create a lead
           </Link>
         </p>

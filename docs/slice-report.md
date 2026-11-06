@@ -53,7 +53,22 @@ RLS enabled on every table; clients hold SELECT only. Scope rules: tenant isolat
 | Mobile unit tests | `npm test --workspace @aiec/mobile` | **4 passed** |
 | Mobile typecheck + Android JS bundle | `tsc --noEmit`; `expo export --platform android` | passed (773 modules, Hermes bytecode) |
 
-Not run here (no backend/device available): web flows against a hosted Supabase project (Auth OTP, PostgREST, Storage), an installed Android build on a device, CI on GitHub (workflow added; first run happens on push).
+| Browser E2E walkthrough (`e2e/`, production web build, real schema/RLS/RPCs via a local test gateway) | see `e2e/README.md` | **25/25 checks, 7 consecutive clean runs** (Sales, Owner, Technical, Partner, pending user, 390 px mobile width) |
+| GitHub Actions CI on the PR | `.github/workflows/ci.yml` | passed |
+
+### Defects found by the E2E walkthrough and fixed
+
+| Symptom | Root cause | Fix |
+|---|---|---|
+| Soft navigations (link clicks, post-action navigation) into pages containing action forms intermittently never completed (~30–70% in production builds; not reproducible in dev) | Route-group `(app)/loading.tsx` Suspense boundary interacting with production client navigation in Next 15.5 | Removed the route-group loading boundary (per-action pending states remain): 20/20 navigations after the fix |
+| Forms stuck on "Working…" after a successful save | `revalidatePath()` inside server actions under the same conditions | Actions return their result; forms call `router.refresh()` on success (`useRefreshOnSuccess`) |
+| After "Create lead", the page did not open the new lead | Server-action `redirect()` / immediate `router.push()` aborted by the router | Full navigation to the new lead after creation (10/10) |
+| Login could leave the app between two client transitions | `router.replace()` + `router.refresh()` after sign-in | Full page load after sign-in so middleware and server components see the new session cookie |
+| Every lead in a list was prefetched (25 server renders per list view) | Default `<Link>` prefetch | `prefetch={false}` on authenticated links |
+| Survey page labelled the reason of an already-submitted revision as "Revision requested" | Wording | "Reason for this revision" |
+| DB test suite failed ~1 run in 5 | Random test names were occasionally similar enough for the (correct) duplicate detector | Test data now uses unrelated random words and random phone numbers: 0 failures in 15 consecutive runs |
+
+Not run here: web flows against a hosted Supabase project (the E2E gateway stands in for Supabase's HTTP layer; Supabase Auth SMS delivery and Storage uploads are not exercised), and an installed Android build on a device.
 
 ## 8. Known limitations and unresolved decisions
 

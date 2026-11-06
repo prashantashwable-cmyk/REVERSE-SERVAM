@@ -1,20 +1,11 @@
 import Link from 'next/link';
-import { revalidatePath } from 'next/cache';
 import { fromServerError } from '@aiec/domain';
 import { Badge, Card, EmptyState, ErrorPanel, PageHeader } from '@/components/ui';
 import { dt } from '@/lib/format';
 import { supabaseServer } from '@/lib/supabase/server';
+import { MarkReadButton } from './mark-read';
 
 export const metadata = { title: 'Notifications' };
-
-async function markRead(form: FormData) {
-  'use server';
-  const id = form.get('id');
-  if (typeof id !== 'string' || !/^[0-9a-f-]{36}$/i.test(id)) return;
-  const supabase = await supabaseServer();
-  await supabase.rpc('mark_notification_read', { p_notification_id: id });
-  revalidatePath('/notifications');
-}
 
 const LINK: Record<string, (id: string) => string> = {
   lead: (id) => `/leads/${id}`,
@@ -65,16 +56,11 @@ export default async function NotificationsPage() {
                     {href ? (
                       <>
                         {' · '}
-                        <Link href={href} className="underline">Open</Link>
+                        <Link prefetch={false} href={href} className="underline">Open</Link>
                       </>
                     ) : null}
                   </span>
-                  {!n.read_at ? (
-                    <form action={markRead}>
-                      <input type="hidden" name="id" value={n.id} />
-                      <button className="text-xs underline">Mark read</button>
-                    </form>
-                  ) : null}
+                  {!n.read_at ? <MarkReadButton id={n.id} /> : null}
                 </li>
               );
             })}
