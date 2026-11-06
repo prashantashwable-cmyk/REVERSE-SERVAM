@@ -1,0 +1,28 @@
+{
+  "expo": {
+    "name": "AIEC Field",
+    "slug": "aiec-field",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "platforms": ["android"],
+    "android": {
+      "package": "in.aiec.field",
+      "versionCode": 1,
+      "permissions": ["CAMERA", "ACCESS_FINE_LOCATION", "ACCESS_COARSE_LOCATION"],
+      "blockedPermissions": ["android.permission.RECORD_AUDIO", "android.permission.ACCESS_BACKGROUND_LOCATION"]
+    },
+    "plugins": [
+      "expo-sqlite",
+      "expo-secure-store",
+      [
+        "expo-location",
+        { "locationWhenInUsePermission": "AIEC records your location only when you check in at a site or capture evidence, to prove where survey work was done." }
+      ],
+      [
+        "expo-image-picker",
+        { "cameraPermission": "AIEC uses the camera to capture site evidence photos.", "photosPermission": false }
+      ]
+    ]
+  }
+}
