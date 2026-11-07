@@ -24,6 +24,7 @@ const T = (key, params = {}) => {
 // data the people typed (names, projects, addresses) collected below.
 const LATIN_OK = new Set(['AIEC', 'OS', 'GPS', 'IST', 'OTP', 'MRL', 'SMS', 'WhatsApp', 'PUN', 'PCMC', 'LD', 'SV', 'mm', 'cm', 'DEMO', 'Supabase', 'ID', 'demo', 'BOM', 'TR', 'QT', 'TD', 'kg', 'PDF', 'CSV', 'Excel', 'MB', 'SHA', 'GST',
   'PR', 'PO', 'GRN', 'OR', 'PM', 'NEFT', 'RTGS', 'IMPS', 'UPI', 'UTR', // business-number prefixes and payment rails
+  'LLP',
   'English', // the language switch names each language in its own script
 ]);
 const dataWords = new Set();
@@ -75,7 +76,7 @@ async function seedSubmittedSurvey(db) {
   return { leadId: lead.lead_id, surveyNumber: sv.survey_number, project };
 }
 
-const PHONES = { owner: '9000000000', sales1: '9000000001', surveyor2: '9000000004', tech1: '9000000005', ops1: '9000000006', partnerA_admin: '9000000007', pending1: '9000000012', finance1: '9000000013', procure1: '9000000014' };
+const PHONES = { owner: '9000000000', sales1: '9000000001', surveyor2: '9000000004', tech1: '9000000005', ops1: '9000000006', partnerA_admin: '9000000007', partnerA_tech: '9000000008', partnerB_admin: '9000000009', pending1: '9000000012', finance1: '9000000013', procure1: '9000000014' };
 const results = [];
 let shot = 0;
 
@@ -122,6 +123,12 @@ async function snap(page, name, check) {
   results.push({ file, ok, note });
   console.log(`${ok ? 'PASS' : 'FAIL'} ${file} ${note}`);
 }
+/** Click a server-action submit button and wait for the action's response (sent after the database update). */
+async function submitAction(page, label) {
+  const done = page.waitForResponse((r) => r.request().method() === 'POST' && !!r.request().headers()['next-action'], { timeout: 15000 });
+  await page.click(`button:has-text("${label}")`);
+  await done;
+}
 const expectText = (page, text) => async () => {
   await page.getByText(text, { exact: false }).first().waitFor({ timeout: 8000 });
   return `saw "${text}"`;
@@ -145,6 +152,14 @@ const expectText = (page, text) => async () => {
       union all select coalesce(source_exception_reason, '') from evidence_files
       union all select coalesce(reason, '') from audit_logs
       union all select coalesce(reason, '') from lead_duplicate_decisions
+      union all select coalesce(legal_name, '') || ' ' || coalesce(registered_address, '') || ' ' || coalesce(authorized_representative, '') || ' ' || array_to_string(service_areas, ' ') || ' ' || coalesce(status_reason, '') from partner_profiles
+      union all select doc_number || ' ' || issuer || ' ' || coalesce(rejection_reason, '') from partner_documents
+      union all select scope_summary || ' ' || payment_terms || ' ' || material_responsibility || ' ' || safety_requirements || ' ' || coalesce(exclusions, '') || ' ' || coalesce(response_reason, '') from project_partner_assignments
+      union all select coalesce(notes, '') || ' ' || coalesce(block_reason, '') from project_tasks
+      union all select description || ' ' || coalesce(resolution, '') from execution_incidents
+      union all select work_completed || ' ' || next_day_plan || ' ' || coalesce(safety_observations, '') || ' ' || coalesce(blockers, '') from daily_reports
+      union all select comment from daily_report_comments
+      union all select coalesce(training_note, '') from partner_workers
       union all select contract_reference || ' ' || coalesce(notes, '') from orders
       union all select title || ' ' || site_label || ' ' || coalesce(handover_notes, '') from projects
       union all select payer_name || ' ' || payment_reference || ' ' || coalesce(evidence_note, '') || ' ' || coalesce(matched_statement_reference, '') || ' ' || coalesce(decision_reason, '') from payment_claims
@@ -331,8 +346,7 @@ const expectText = (page, text) => async () => {
   await tq.getByText(T('technical.configuration_saved')).waitFor({ timeout: 10000 });
   await tq.reload();
   await snap(tq, 's3-tech-configuration-draft', expectText(tq, T('technical.configuration_complete')));
-  await tq.click(`button:has-text("${T('technical.approve_configuration')}")`);
-  await tq.getByRole('button', { name: T('technical.approve_configuration') }).waitFor({ state: 'detached', timeout: 15000 });
+  await submitAction(tq, T('technical.approve_configuration'));
   await tq.reload();
   await tq.selectOption('#doc_kind', 'shaft_layout');
   await tq.fill('#doc_title', 'Shaft layout');
@@ -342,8 +356,7 @@ const expectText = (page, text) => async () => {
   await tq.getByRole('button', { name: T('technical.submit_document') }).waitFor({ timeout: 15000 });
   await tq.click(`button:has-text("${T('technical.submit_document')}")`);
   await tq.getByRole('button', { name: T('technical.approve_document') }).waitFor({ timeout: 15000 });
-  await tq.click(`button:has-text("${T('technical.approve_document')}")`);
-  await tq.getByRole('button', { name: T('technical.approve_document') }).waitFor({ state: 'detached', timeout: 15000 });
+  await submitAction(tq, T('technical.approve_document'));
   await tq.reload();
   await snap(tq, 's3-tech-configuration-and-document-approved', expectText(tq, T('technical.document_state.approved')));
 
@@ -403,6 +416,7 @@ const expectText = (page, text) => async () => {
     'MC', 'GR', 'set', 'pcs', 'Lowest matching price', '30 percent advance, balance on delivery', 'Received in good condition', 'Pune', 'Aundh', 'Demo Supplier Lift Components');
   const q4 = new Client({ connectionString: process.env.AIEC_E2E_DATABASE_URL ?? 'postgres://postgres@127.0.0.1:54329/aiec_test' });
   await q4.connect();
+  const isoDayS = (n) => new Date(Date.now() + 330 * 60000 + n * 864e5).toISOString().slice(0, 10);
   const isoDay = (n) => new Date(Date.now() + 330 * 60000 + n * 864e5).toISOString().slice(0, 10);
 
   await sq.goto(quoteUrl);
@@ -421,8 +435,7 @@ const expectText = (page, text) => async () => {
   await snap(op, 's4-ops-home-kpi', expectText(op, T('kpi.projects_awaiting_planning.label')));
   await op.goto(projectUrl);
   await op.fill('#handover_notes', 'Accepted; plan the site visit');
-  await op.click(`button:has-text("${T('project.acknowledge')}")`);
-  await op.getByRole('button', { name: T('project.acknowledge') }).waitFor({ state: 'detached', timeout: 15000 });
+  await submitAction(op, T('project.acknowledge'));
   await op.reload(); await op.waitForLoadState('networkidle');
   await snap(op, 's4-ops-handover-accepted-gate-blocked', async () => {
     await op.getByText(T('project.state.planning')).first().waitFor({ timeout: 8000 });
@@ -458,8 +471,7 @@ const expectText = (page, text) => async () => {
   await tq.fill('#bi_1', 'GR-02'); await tq.fill('#bd_1', 'Guide rails'); await tq.fill('#bq_1', '2'); await tq.fill('#bu_1', 'pcs');
   await tq.click(`button:has-text("${T('bom.save')}")`);
   await tq.getByRole('button', { name: T('bom.approve') }).waitFor({ timeout: 15000 });
-  await tq.click(`button:has-text("${T('bom.approve')}")`);
-  await tq.getByRole('button', { name: T('bom.approve') }).waitFor({ state: 'detached', timeout: 15000 });
+  await submitAction(tq, T('bom.approve'));
   await tq.reload(); await tq.waitForLoadState('networkidle');
   await snap(tq, 's4-tech-bom-approved', expectText(tq, T('bom.state.approved')));
 
@@ -503,7 +515,8 @@ const expectText = (page, text) => async () => {
 
   await pp.goto(poUrl);
   await pp.click(`button:has-text("${T('procurement.issue_po')}")`);
-  await pp.getByRole('button', { name: T('procurement.issue_po') }).waitFor({ state: 'detached', timeout: 15000 });
+  // Wait for the lasting result (the button's label changes to "Working…" while pending, so "detached" is not proof).
+  await pp.getByText(T('procurement.issued_hint')).waitFor({ timeout: 15000 });
   await pp.reload(); await pp.waitForLoadState('networkidle');
   await pp.getByRole('button', { name: T('action.material.confirm'), exact: true }).first().waitFor({ timeout: 15000 });
   // Advance every line to delivered, one click per refresh (each click re-renders the row).
@@ -541,6 +554,211 @@ const expectText = (page, text) => async () => {
     return 'sales cannot open supplier prices';
   });
   await q4.end();
+  // ---------- Slice 5: partner onboarding → readiness → invitation → tasks with safety → daily report ----------
+  const offerScope = 'Install one 8-person MRL lift as per approved drawings';
+  addData('Alpha Lift Works', 'Shop 4, Baner Road, Pune', 'Mr. Anil Patil', 'Pune', 'PCMC', 'Licensing Authority Pune', 'Insurer Pune', 'Income Tax Department', 'State Bank',
+    'LIC-2026-001', 'INS-2026-001', 'ABCDE1234F', 'SB-2026-001', offerScope, '40 percent on rails, 40 percent on QA, 20 percent on handover', 'AIEC supplies lift material',
+    'Full PPE, harness above 2 m', 'Civil work', 'Induction and harness training done', 'Open landing door on floor 3', 'Guard rail fixed and checked',
+    'Guard rail fixed', 'Unloaded material, marked bracket positions', 'Fix rail brackets floors 1 to 3', 'Please photograph bracket spacing tomorrow');
+  const pa = await login(browser, 'partnerA_admin');
+  await pa.goto(`${BASE}/partner/company`);
+  await pa.fill('#legal_name', 'Alpha Lift Works LLP');
+  await pa.selectOption('#entity_type', 'llp');
+  await pa.fill('#registered_address', 'Shop 4, Baner Road, Pune');
+  await pa.fill('#authorized_representative', 'Mr. Anil Patil');
+  await pa.fill('#contact_phone', '9822000001');
+  await pa.fill('#service_areas', 'Pune\nPCMC');
+  await pa.check('input[name="lift_categories"][value="passenger"]');
+  await pa.fill('#team_size', '8');
+  await pa.check('input[name="safety_policy_accepted"]');
+  await pa.check('input[name="compliance_declaration"]');
+  await pa.click(`button:has-text("${T('partner.save_profile')}")`);
+  await pa.getByRole('button', { name: T('partner.submit_profile') }).waitFor({ timeout: 15000 });
+  const docsToUpload = [
+    ['contractor_licence', 'LIC-2026-001', 'Licensing Authority Pune'], ['insurance', 'INS-2026-001', 'Insurer Pune'],
+    ['pan', 'ABCDE1234F', 'Income Tax Department'], ['bank_verification', 'SB-2026-001', 'State Bank'],
+  ];
+  for (const [i, [type, number, issuer]] of docsToUpload.entries()) {
+    await pa.selectOption('#doc_type', type);
+    await pa.fill('#doc_number', number);
+    await pa.fill('#issuer', issuer);
+    if (type === 'contractor_licence' || type === 'insurance') await pa.fill('#expires_on', isoDayS(365));
+    if (type === 'contractor_licence') await pa.check('input[name="scope"][value="passenger"]');
+    await pa.setInputFiles('#doc_file', { name: `${type}.pdf`, mimeType: 'application/pdf', buffer: Buffer.from(`%PDF-1.4\n% ${type} ${Date.now()}\n%%EOF\n`) });
+    await pa.click(`button:has-text("${T('partner.upload_document')}")`);
+    await pa.waitForFunction(([label, n]) => [...document.querySelectorAll('li')].filter((li) => li.textContent.includes(label)).length >= n, [T('partners.verification.pending'), i + 1], { timeout: 15000 });
+    await pa.reload(); await pa.waitForLoadState('networkidle');
+  }
+  await snap(pa, 's5-partner-profile-and-documents', expectText(pa, T('partners.verification.pending')));
+  await pa.click(`button:has-text("${T('partner.submit_profile')}")`);
+  await pa.getByText(T('partner.profile_locked')).waitFor({ timeout: 15000 });
+
+  const ow = await login(browser, 'owner');
+  await ow.goto(`${BASE}/partners`);
+  await snap(ow, 's5-owner-partner-portfolio', expectText(ow, 'Demo Partner Alpha Lifts'));
+  await ow.getByRole('link', { name: 'Demo Partner Alpha Lifts' }).click();
+  await ow.waitForURL(/\/partners\/[0-9a-f-]{36}$/, { waitUntil: 'commit' }); await ow.waitForLoadState('networkidle');
+  const partnerUrl = ow.url();
+  await ow.selectOption('#partner_action', 'start_verification');
+  await ow.click(`button:has-text("${T('partners.record_decision')}")`);
+  await ow.getByText(T('partner.state.verification_pending')).first().waitFor({ timeout: 15000 });
+  for (let n = 0; n < 4; n++) {
+    await ow.reload(); await ow.waitForLoadState('networkidle');
+    const before = await ow.getByRole('button', { name: T('partners.verify'), exact: true }).count();
+    await ow.getByRole('button', { name: T('partners.verify'), exact: true }).first().click();
+    await ow.waitForFunction(([l, c]) => [...document.querySelectorAll('button')].filter((b) => b.textContent === l).length < c, [T('partners.verify'), before], { timeout: 15000 });
+  }
+  await ow.reload(); await ow.waitForLoadState('networkidle');
+  await ow.selectOption('#partner_action', 'approve');
+  await ow.click(`button:has-text("${T('partners.record_decision')}")`);
+  await ow.getByText(T('partner.state.approved')).first().waitFor({ timeout: 15000 });
+  await ow.reload(); await ow.waitForLoadState('networkidle');
+  await snap(ow, 's5-owner-partner-approved-eligible', expectText(ow, T('partners.eligible')));
+
+  await pa.goto(`${BASE}/partner/team`);
+  for (const skill of ['general', 'mechanical', 'electrical', 'testing']) await pa.check(`input[name="skills"][value="${skill}"]`);
+  await pa.fill('input[name="training_note"]', 'Induction and harness training done');
+  await pa.click(`button:has-text("${T('partner.save_worker')}")`);
+  await pa.getByText(T('partner.worker_saved')).waitFor({ timeout: 15000 });
+
+  // Operations: site readiness (Gate 8), then invite the eligible partner (Gate 7).
+  await op.goto(projectUrl);
+  for (const sel of await op.locator('select[name^="result_"]').all()) await sel.selectOption('pass');
+  await op.click(`button:has-text("${T('execution.record_site')}")`);
+  await op.getByText(T('execution.site_passed')).first().waitFor({ timeout: 15000 });
+  await op.reload(); await op.waitForLoadState('networkidle');
+  await op.selectOption('#partner_org_id', { label: 'Demo Partner Alpha Lifts' });
+  await op.fill('#scope_summary', offerScope);
+  await op.fill('#schedule_from', isoDayS(3)); await op.fill('#schedule_to', isoDayS(40));
+  await op.fill('#contract_value', '450000');
+  await op.fill('#inv_payment_terms', '40 percent on rails, 40 percent on QA, 20 percent on handover');
+  await op.fill('#material_responsibility', 'AIEC supplies lift material');
+  await op.fill('#safety_requirements', 'Full PPE, harness above 2 m');
+  await op.fill('#inv_exclusions', 'Civil work');
+  await op.click(`button:has-text("${T('execution.invite')}")`);
+  await op.getByText(T('execution.assignment_state.invited')).first().waitFor({ timeout: 15000 });
+  await op.reload(); await op.waitForLoadState('networkidle');
+  await snap(op, 's5-ops-site-ready-partner-invited', expectText(op, T('execution.assignment_state.invited')));
+
+  await pa.goto(`${BASE}/partner`);
+  await snap(pa, 's5-partner-invitation', expectText(pa, T('execution.assignment_state.invited')));
+  await pa.locator('a[href^="/partner/assignments/"]').first().click();
+  await pa.waitForURL(/\/partner\/assignments\//, { waitUntil: 'commit' }); await pa.waitForLoadState('networkidle');
+  const assignmentUrl = pa.url();
+  await pa.click(`button:has-text("${T('partner.accept_invitation')}")`);
+  await pa.getByRole('button', { name: T('partner.add_member') }).waitFor({ timeout: 15000 });
+  await pa.click(`button:has-text("${T('partner.add_member')}")`);
+  await pa.getByRole('button', { name: T('partner.assign_task') }).first().waitFor({ timeout: 15000 });
+  await pa.reload(); await pa.waitForLoadState('networkidle');
+  const mobilisation = pa.locator('li', { hasText: T('work.task.mobilisation') }).first();
+  await mobilisation.getByRole('button', { name: T('partner.assign_task') }).click();
+  await mobilisation.getByText(T('work.state.assigned'), { exact: true }).waitFor({ timeout: 15000 });
+  await pa.reload(); await pa.waitForLoadState('networkidle');
+  await snap(pa, 's5-partner-accepted-team-task-assigned', expectText(pa, T('work.state.assigned')));
+
+  // Pre-dispatch payment verified, then installation ready and started.
+  const q5 = new Client({ connectionString: process.env.AIEC_E2E_DATABASE_URL ?? 'postgres://postgres@127.0.0.1:54329/aiec_test' });
+  await q5.connect();
+  const pre = (await q5.query(`select amount_paise::text as a from payment_milestones where project_id = $1 and code = 'pre_dispatch'`, [projectId])).rows[0].a;
+  await q5.end();
+  await sq.goto(projectUrl);
+  await sq.selectOption('#milestone_code', 'pre_dispatch');
+  await sq.fill('#payer_name', 'Aditya Heights Society');
+  await sq.fill('#claim_amount', `${pre.slice(0, -2)}.${pre.slice(-2)}`);
+  await sq.fill('#payment_reference', `${utr}2`);
+  await sq.click(`button:has-text("${T('payment.record_claim')}")`);
+  await sq.getByText(T('payment.state.claimed')).first().waitFor({ timeout: 15000 });
+  await fp.goto(`${BASE}/finance`);
+  const preCard = fp.locator('section', { hasText: `${utr}2` });
+  await preCard.locator('input[name="matched_statement_reference"]').fill(`HDFC statement line ${utr}2`);
+  addData(`${utr}2`, `HDFC statement line ${utr}2`);
+  await preCard.getByRole('button', { name: T('payment.record_decision') }).click();
+  await preCard.waitFor({ state: 'detached', timeout: 15000 });
+  await op.goto(projectUrl);
+  await op.click(`button:has-text("${T('action.mark_installation_ready')}")`);
+  await op.getByRole('button', { name: T('action.start_installation') }).waitFor({ timeout: 15000 });
+  await op.click(`button:has-text("${T('action.start_installation')}")`);
+  await op.getByText(T('project.state.installation')).first().waitFor({ timeout: 15000 });
+  await op.reload(); await op.waitForLoadState('networkidle');
+  await snap(op, 's5-ops-installation-started', expectText(op, T('project.state.installation')));
+
+  // Technician: accept → safety pre-start (Gate 11) → start → safety stop → AIEC lifts → new pre-start → resume.
+  const tc = await login(browser, 'partnerA_tech');
+  await tc.goto(`${BASE}/work`);
+  await snap(tc, 's5-technician-my-work', expectText(tc, T('work.task.mobilisation')));
+  await tc.getByRole('link', { name: T('work.task.mobilisation') }).click();
+  await tc.waitForURL(/\/work\/[0-9a-f-]{36}$/, { waitUntil: 'commit' }); await tc.waitForLoadState('networkidle');
+  const taskUrl = tc.url();
+  await tc.click(`button:has-text("${T('work.accept')}")`);
+  await tc.getByRole('button', { name: T('work.record_safety') }).waitFor({ timeout: 15000 });
+  const confirmAll = async () => { for (const sel of await tc.locator('select[name^="safety_"]').all()) await sel.selectOption('confirmed'); };
+  await confirmAll();
+  await tc.click(`button:has-text("${T('work.record_safety')}")`);
+  await tc.getByRole('button', { name: T('work.start') }).waitFor({ timeout: 15000 });
+  await snap(tc, 's5-technician-safety-passed', expectText(tc, T('work.safety_ok')));
+  await tc.click(`button:has-text("${T('work.start')}")`);
+  await tc.getByRole('button', { name: T('work.save_progress') }).waitFor({ timeout: 15000 });
+  await tc.reload(); await tc.waitForLoadState('networkidle');
+  await tc.selectOption('#inc_category', 'unsafe_condition');
+  await tc.fill('#inc_description', 'Open landing door on floor 3');
+  await tc.click(`button:has-text("${T('work.report')}")`);
+  await tc.getByText(T('work.safety_stop_banner')).first().waitFor({ timeout: 15000 });
+  await tc.reload(); await tc.waitForLoadState('networkidle');
+  await snap(tc, 's5-technician-safety-stop', expectText(tc, T('work.safety_stop_banner')));
+  await op.goto(projectUrl);
+  await op.locator('input[name="resolution"]').first().fill('Guard rail fixed and checked');
+  await op.click(`button:has-text("${T('execution.lift_safety_stop')}")`);
+  await op.getByText(T('execution.incident_state.resolved')).first().waitFor({ timeout: 15000 });
+  await tc.goto(taskUrl);
+  await confirmAll();
+  await tc.click(`button:has-text("${T('work.record_safety')}")`);
+  await tc.getByText(T('work.safety_passed')).first().waitFor({ timeout: 15000 });
+  await pa.goto(assignmentUrl);
+  const blockedTask = pa.locator('li', { hasText: T('work.task.mobilisation') }).first();
+  await blockedTask.locator('input[name="reason"]').fill('Guard rail fixed');
+  await blockedTask.getByRole('button', { name: T('action.unblock') }).click();
+  await pa.locator('li', { hasText: T('work.task.mobilisation') }).first().getByText(T('work.state.in_progress'), { exact: true }).waitFor({ timeout: 15000 });
+
+  // Gate 9: checklist + required photo, then submit.
+  await tc.goto(taskUrl);
+  for (const box of await tc.locator('input[type="checkbox"][name^="done_"]').all()) await box.check();
+  await tc.click(`button:has-text("${T('work.save_progress')}")`);
+  await tc.getByText(T('work.progress_saved')).waitFor({ timeout: 15000 });
+  await tc.reload(); await tc.waitForLoadState('networkidle');
+  await tc.selectOption('#ev_category', 'before');
+  await tc.setInputFiles('#ev_file', { name: 'before.jpg', mimeType: 'image/jpeg', buffer: Buffer.from([0xff, 0xd8, 0xff, 0xe0, ...Buffer.from(`AIEC ${Date.now()}`), 0xff, 0xd9]) });
+  await tc.click(`button:has-text("${T('work.add_photo')}")`);
+  await tc.getByText(T('work.evidence_added')).waitFor({ timeout: 15000 });
+  await tc.reload(); await tc.waitForLoadState('networkidle');
+  await snap(tc, 's5-technician-checklist-and-photo', expectText(tc, T('enum.task_evidence.before')));
+  await tc.click(`button:has-text("${T('work.submit')}")`);
+  await tc.getByText(T('work.submitted_note')).waitFor({ timeout: 15000 });
+  await snap(tc, 's5-technician-task-submitted', expectText(tc, T('work.submitted_note')));
+
+  // Daily report (LP08) and an AIEC comment (OM06).
+  await pa.goto(assignmentUrl);
+  await pa.check('input[name="present"]');
+  await pa.fill('#work_completed', 'Unloaded material, marked bracket positions');
+  await pa.selectOption('#incident_declared', 'yes');
+  await pa.fill('#safety_observations', 'Open landing door on floor 3');
+  await pa.fill('#next_day_plan', 'Fix rail brackets floors 1 to 3');
+  await pa.click(`button:has-text("${T('partner.submit_report')}")`);
+  await pa.getByText(T('partner.report_submitted')).waitFor({ timeout: 15000 });
+  await op.goto(projectUrl);
+  await op.locator('input[name="comment"]').first().fill('Please photograph bracket spacing tomorrow');
+  await op.click(`button:has-text("${T('execution.add_comment')}")`);
+  await op.getByText('Please photograph bracket spacing tomorrow').first().waitFor({ timeout: 15000 });
+  await op.reload(); await op.waitForLoadState('networkidle');
+  await snap(op, 's5-ops-tasks-incident-daily-report', expectText(op, T('work.state.submitted')));
+  await pa.goto(assignmentUrl);
+  await snap(pa, 's5-partner-sees-aiec-comment', expectText(pa, 'Please photograph bracket spacing tomorrow'));
+  const pb = await login(browser, 'partnerB_admin');
+  await snap(pb, 's5-other-partner-cannot-open-assignment', async () => {
+    await pb.goto(assignmentUrl);
+    await pb.getByText(T('error.NOT_FOUND.title')).first().waitFor({ timeout: 8000 });
+    return 'partner B cannot open partner A’s project';
+  });
+
 
   // ---------- Mobile viewport (sales) ----------
   const m = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });

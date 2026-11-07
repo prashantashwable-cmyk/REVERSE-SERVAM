@@ -2318,6 +2318,7 @@ export const en = {
   'work.safety.supervisor_briefing': 'Supervisor briefing done',
   'work.safety.tool_inspection': 'Tools inspected',
   'work.safety.work_at_height': 'Harness and work-at-height controls',
+  'work.safety_after_stop': 'After AIEC lifts the stop, record a new safety check here before work resumes.',
   'work.safety_blocked': 'Start blocked',
   'work.safety_categories_hint': 'Choose the closest category.',
   'work.safety_failed': 'Critical control not confirmed: you cannot start. Call your supervisor.',

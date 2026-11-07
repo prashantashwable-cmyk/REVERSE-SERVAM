@@ -265,7 +265,7 @@ describe('Slice 4 — purchase orders, material tracking and goods receipt (PR03
 
 describe('Slice 4 — staff names on record cards', () => {
   it('AIEC staff see names of AIEC and partner people; partner people only their own organization; pending users nothing', async () => {
-    const ids = `{${[fx.users.sales1, fx.users.finance1, fx.users.partnerA_admin, fx.users.partnerB_admin, fx.users.customer1].join(',')}}`; // uuid[] literal
+    const ids = [fx.users.sales1, fx.users.finance1, fx.users.partnerA_admin, fx.users.partnerB_admin, fx.users.customer1];
     const seen = await as('finance1').rpc('staff_display_names', { p_ids: ids });
     expect(seen.map((p: { id: string }) => p.id).sort()).toEqual([fx.users.sales1, fx.users.finance1, fx.users.partnerA_admin, fx.users.partnerB_admin].sort());
     expect(Object.keys(seen[0]).sort()).toEqual(['full_name', 'id']);

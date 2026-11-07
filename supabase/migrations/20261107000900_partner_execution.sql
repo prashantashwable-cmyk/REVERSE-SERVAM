@@ -1874,7 +1874,7 @@ end;
 $$;
 
 -- Names for record cards: AIEC staff see AIEC and partner people; partner people see their own organization.
-create or replace function public.staff_display_names(p_ids uuid[])
+create or replace function public.staff_display_names(p_ids jsonb)
 returns jsonb
 language plpgsql
 stable
@@ -1885,12 +1885,13 @@ declare
   v_uid uuid := app.require_actor();
   v_aiec uuid := app.aiec_org_id();
   v_is_aiec boolean := exists (select 1 from public.organization_memberships m where m.user_id = v_uid and m.organization_id = v_aiec and m.status = 'active');
+  v_ids uuid[] := array(select app.try_uuid(x) from jsonb_array_elements_text(case when jsonb_typeof(p_ids) = 'array' then p_ids else '[]'::jsonb end) x);
 begin
-  if cardinality(p_ids) > 200 then perform app.j_field_error('ids'); end if;
+  if cardinality(v_ids) > 200 then perform app.j_field_error('ids'); end if;
   return coalesce((
     select jsonb_agg(jsonb_build_object('id', up.id, 'full_name', up.full_name))
     from public.user_profiles up
-    where up.id = any (coalesce(p_ids, '{}'))
+    where up.id = any (v_ids)
       and exists (
         select 1 from public.organization_memberships target join public.organizations o on o.id = target.organization_id
         where target.user_id = up.id
@@ -1972,5 +1973,5 @@ grant execute on function
   public.comment_daily_report(uuid, text),
   public.project_readiness(uuid),
   public.project_execution_action(uuid, integer, text),
-  public.staff_display_names(uuid[])
+  public.staff_display_names(jsonb)
 to authenticated;

@@ -29,15 +29,18 @@ export default async function WorkTaskPage({ params }: { params: Promise<{ id: s
   if (error) return <ErrorPanel code={fromServerError(error).code} />;
   if (!task) notFound();
   const mine = task.assignee_user_id === ctx.user_id;
-  const [{ data: project }, { data: checks }, { data: evidence }, { data: prereqs }] = await Promise.all([
+  const [{ data: project }, { data: checks }, { data: evidence }, { data: prereqs }, { data: stops }] = await Promise.all([
     supabase.from('projects').select('id, project_number, title, site_label, status').eq('id', task.project_id).maybeSingle(),
     supabase.from('task_safety_checks').select('*').eq('task_id', id).order('recorded_at', { ascending: false }).limit(1),
     supabase.from('task_evidence').select('id, category, captured_at, server_received_at, remarks, source').eq('task_id', id).order('server_received_at'),
     task.prerequisites?.length ? supabase.from('project_tasks').select('code, status').eq('project_id', task.project_id).in('code', task.prerequisites) : Promise.resolve({ data: [] as any[] }),
+    supabase.from('execution_incidents').select('reported_at, resolved_at').eq('task_id', id).eq('safety_stop', true),
   ]);
   // The partner org owns the evidence folder; it is the organization in the assignee's partner membership.
   const partnerOrg = ctx.memberships.find((m) => m.organization_kind === 'partner')?.organization_id ?? '';
-  const lastCheck = checks?.[0];
+  // A pre-start recorded before the latest safety stop (or its lifting) no longer counts (Gate 11).
+  const resetAt = Math.max(0, ...(stops ?? []).map((x: any) => Date.parse(x.resolved_at ?? x.reported_at)));
+  const lastCheck = checks?.[0] && Date.parse(checks[0].recorded_at) > resetAt ? checks[0] : undefined;
   const todayIst = new Date(Date.now() + 330 * 60000).toISOString().slice(0, 10);
   const checkToday = lastCheck && new Date(new Date(lastCheck.recorded_at).getTime() + 330 * 60000).toISOString().slice(0, 10) === todayIst;
   const evidenceCats = (evidence ?? []).map((e: any) => e.category);
@@ -78,8 +81,14 @@ export default async function WorkTaskPage({ params }: { params: Promise<{ id: s
               {!lastCheck.can_start ? <span className="text-crit-700">{t('work.critical_missing', { list: (lastCheck.critical_failures ?? []).map((k: string) => t(`work.safety.${k}`)).join(', ') })}</span> : null}
             </p>
           ) : null}
-          <p className="mb-2 text-sm text-silver-700">{t('work.safety_intro', { n: DEFAULT_SAFETY_CHECKS.filter((c) => c.critical).length })}</p>
-          <SafetyCheckForm taskId={task.id} operationId={randomUUID()} />
+          {task.safety_stop ? (
+            <p className="text-sm text-crit-700">{t('work.safety_after_stop')}</p>
+          ) : (
+            <>
+              <p className="mb-2 text-sm text-silver-700">{t('work.safety_intro', { n: DEFAULT_SAFETY_CHECKS.filter((c) => c.critical).length })}</p>
+              <SafetyCheckForm taskId={task.id} operationId={randomUUID()} />
+            </>
+          )}
           {task.status === 'accepted' ? (
             <div className="mt-4 border-t border-silver-200 pt-4">
               {!installing ? <p className="text-sm text-warn-700">{t('work.wait_installation')}</p>
