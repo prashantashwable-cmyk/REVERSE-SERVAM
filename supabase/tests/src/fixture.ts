@@ -12,12 +12,14 @@ export const USERS = [
   'partnerB_tech',
   'customer1',
   'pending1',
+  'finance1',
+  'procure1',
 ] as const;
 export type UserKey = (typeof USERS)[number];
 
 export interface Fixture {
   users: Record<UserKey, string>;
-  orgs: { aiec: string; partnerA: string; partnerB: string; customer: string };
+  orgs: { aiec: string; partnerA: string; partnerB: string; customer: string; supplier: string };
 }
 
 declare module 'vitest' {

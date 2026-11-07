@@ -6,6 +6,7 @@ export * from './state-machine';
 export * from './machines';
 export * from './survey';
 export * from './technical';
+export * from './procurement';
 export * from './duplicates';
 export * from './commercial';
 export * from './gates';

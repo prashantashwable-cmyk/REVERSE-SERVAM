@@ -710,6 +710,8 @@ export const paymentMachine = defineMachine<PaymentState, string, PaymentContext
     },
     { action: 'request_clarification', from: ['claimed'], to: 'pending_clarification', permission: 'finance.payment.verify', requiresReason: true, auditEvent: 'payment.clarification_requested' },
     { action: 'resubmit', from: ['pending_clarification'], to: 'claimed', permission: 'customer.approval.decide', auditEvent: 'payment.resubmitted' },
+    // Claims recorded by staff (before the customer portal) are corrected and resubmitted by Sales.
+    { action: 'resubmit_recorded', from: ['pending_clarification'], to: 'claimed', permission: 'order.convert', auditEvent: 'payment.resubmitted' },
     { action: 'reject', from: ['claimed', 'pending_clarification'], to: 'rejected', permission: 'finance.payment.verify', requiresReason: true, auditEvent: 'payment.rejected' },
   ],
 });

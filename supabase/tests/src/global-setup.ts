@@ -52,6 +52,7 @@ export default async function setup(project: TestProject) {
   const partnerA = await createOrg('partner', 'Demo Partner Alpha Lifts', 'Pune');
   const partnerB = await createOrg('partner', 'Demo Partner Beta Elevators', 'PCMC');
   const customer = await createOrg('customer', 'Demo Customer Housing Society', 'Pune');
+  const supplier = await createOrg('supplier', 'Demo Supplier Lift Components', 'Pune');
 
   const grant = async (who: UserKey, org: string, role: string) => {
     await owner.rpc('admin_add_member', { p_user_id: users[who], p_org_id: org, p_reason: 'test fixture' });
@@ -64,6 +65,8 @@ export default async function setup(project: TestProject) {
   await grant('surveyor2', aiec, 'surveyor');
   await grant('tech1', aiec, 'technical_manager');
   await grant('ops1', aiec, 'operations_manager');
+  await grant('finance1', aiec, 'accounts_finance');
+  await grant('procure1', aiec, 'procurement_manager');
   await grant('partnerA_admin', partnerA, 'partner_admin');
   await grant('partnerB_admin', partnerB, 'partner_admin');
   await grant('customer1', customer, 'customer');
@@ -80,7 +83,7 @@ export default async function setup(project: TestProject) {
     await pa.rpc('admin_set_user_status', { p_user_id: users[techKey], p_status: 'active', p_reason: 'identity verified' });
   }
 
-  const fixture: Fixture = { users, orgs: { aiec, partnerA, partnerB, customer } };
+  const fixture: Fixture = { users, orgs: { aiec, partnerA, partnerB, customer, supplier } };
   project.provide('fixture', fixture);
   await pool.end();
 }

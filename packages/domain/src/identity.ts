@@ -50,6 +50,8 @@ export const BUSINESS_ID_PREFIXES = {
   task: 'TK',
   defect: 'DF',
   purchase_order: 'PO',
+  purchase_request: 'PR',
+  goods_receipt: 'GRN',
   payment: 'PM',
   inspection: 'IN',
 } as const;

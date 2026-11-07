@@ -31,6 +31,23 @@ import {
   quotationMachine,
   technicalReviewMachine,
   type QuotationLineInput,
+  ORDER_STATES,
+  PROJECT_STATES,
+  PAYMENT_STATES,
+  MATERIAL_STATES,
+  PURCHASE_REQUEST_STATES,
+  PURCHASE_ORDER_STATES,
+  DEFAULT_MILESTONE_TEMPLATES,
+  DEFAULT_PO_APPROVAL_LIMIT_PAISE,
+  orderMachine,
+  projectMachine,
+  paymentMachine,
+  materialLineMachine,
+  bomMachine,
+  purchaseRequestMachine,
+  purchaseOrderMachine,
+  allocate,
+  computePurchaseOrder,
 } from '@aiec/domain';
 import { admin, makePool } from '../src/db';
 
@@ -70,6 +87,12 @@ describe('DB ↔ domain parity', () => {
     expect(await enumLabels('document_kind')).toEqual([...DOCUMENT_KINDS]);
     expect(await enumLabels('quotation_state')).toEqual([...QUOTATION_STATES]);
     expect(await enumLabels('quotation_line_category')).toEqual([...QUOTATION_LINE_CATEGORIES]);
+    expect(await enumLabels('order_state')).toEqual([...ORDER_STATES]);
+    expect(await enumLabels('project_state')).toEqual([...PROJECT_STATES]);
+    expect(await enumLabels('payment_state')).toEqual([...PAYMENT_STATES]);
+    expect(await enumLabels('material_state')).toEqual([...MATERIAL_STATES]);
+    expect(await enumLabels('purchase_request_state')).toEqual([...PURCHASE_REQUEST_STATES]);
+    expect(await enumLabels('purchase_order_state')).toEqual([...PURCHASE_ORDER_STATES]);
   });
 
   it('state transition tables equal the domain machines', async () => {
@@ -77,7 +100,7 @@ describe('DB ↔ domain parity', () => {
       pool,
       'select machine, from_state, action, to_state, permission_code, requires_reason, audit_event from public.state_transitions',
     );
-    for (const m of [leadMachine, surveyMachine, technicalReviewMachine, documentRevisionMachine, quotationMachine] as const) {
+    for (const m of [leadMachine, surveyMachine, technicalReviewMachine, documentRevisionMachine, quotationMachine, orderMachine, projectMachine, paymentMachine, materialLineMachine, bomMachine, purchaseRequestMachine, purchaseOrderMachine] as const) {
       const expected = m.transitions
         .flatMap((t) => t.from.map((f) => `${f}|${t.action}|${t.to}|${t.permission}|${!!t.requiresReason}|${t.auditEvent}`))
         .sort();
@@ -152,6 +175,25 @@ describe('DB ↔ domain parity', () => {
       const [row] = await admin<{ t: any; e: any }>(pool, 'select app.compute_quotation($1) as t, app.evaluate_discount(app.compute_quotation($1), $2) as e', [JSON.stringify(input), DEFAULT_DISCOUNT_POLICY]);
       expect(row!.t).toEqual(json);
       expect(row!.e).toEqual(evaluateDiscountAuthority(expected, DEFAULT_DISCOUNT_POLICY));
+    }
+  });
+
+  it('Slice 4 rules, milestone allocation and purchase-order maths equal the domain', async () => {
+    const rule = async (k: string) => (await admin<{ v: any }>(pool, 'select app.rule($1) as v', [k]))[0]!.v;
+    expect(await rule('payment.milestone_templates')).toEqual({ templates: DEFAULT_MILESTONE_TEMPLATES });
+    expect(await rule('procurement.po_approval_limit')).toEqual({ limitPaise: DEFAULT_PO_APPROVAL_LIMIT_PAISE.toString() });
+    let seed = 11;
+    const rnd = (n: number) => { seed = (seed * 1103515245 + 12345) % 2147483648; return seed % n; };
+    for (let i = 0; i < 40; i++) {
+      const weights = Array.from({ length: 1 + rnd(6) }, () => 1 + rnd(5000));
+      const total = BigInt(rnd(2_000_000_000)) * BigInt(1 + rnd(50));
+      const [row] = await admin<{ v: string[] }>(pool, 'select app.allocate($1::numeric, $2::integer[])::text[] as v', [total.toString(), weights]);
+      expect(row!.v.map(BigInt), JSON.stringify([total.toString(), weights])).toEqual(allocate(total, weights));
+      const lines = Array.from({ length: 1 + rnd(5) }, () => ({ quantityMilli: 1 + rnd(50000), ratePaise: BigInt(rnd(900_000_000)), taxRateBps: [0, 500, 1200, 1800, 2800][rnd(5)]! }));
+      const freight = BigInt(rnd(5_000_000));
+      const expected = JSON.parse(JSON.stringify(computePurchaseOrder(lines, freight), (_k, v) => (typeof v === 'bigint' ? v.toString() : v)));
+      const [po] = await admin<{ v: unknown }>(pool, 'select app.compute_purchase_order($1, $2) as v', [JSON.stringify(lines.map((l) => ({ ...l, ratePaise: l.ratePaise.toString() }))), freight.toString()]);
+      expect(po!.v).toEqual(expected);
     }
   });
 });
