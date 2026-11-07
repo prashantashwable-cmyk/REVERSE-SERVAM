@@ -1,0 +1,23 @@
+{
+  "name": "@aiec/db-tests",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Integration tests for supabase/migrations: RLS, tenant isolation, RPC workflows, audit, idempotency. Requires a PostgreSQL 15+ server with PostGIS.",
+  "type": "module",
+  "scripts": {
+    "test:db": "vitest run",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "seed:demo": "tsx src/seed-demo.ts"
+  },
+  "dependencies": {
+    "@aiec/domain": "0.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "22.15.30",
+    "@types/pg": "8.15.4",
+    "pg": "8.16.3",
+    "typescript": "5.9.3",
+    "vitest": "3.2.4",
+    "tsx": "4.20.3"
+  }
+}

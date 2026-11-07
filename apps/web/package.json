@@ -1,0 +1,32 @@
+{
+  "name": "@aiec/web",
+  "version": "0.1.0",
+  "private": true,
+  "description": "AIEC management web (Owner, Sales, Technical, Operations, Admin).",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@aiec/domain": "0.1.0",
+    "@supabase/ssr": "0.12.7",
+    "@supabase/supabase-js": "2.119.0",
+    "next": "15.5.29",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "server-only": "0.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "22.15.30",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "autoprefixer": "10.4.21",
+    "postcss": "8.5.6",
+    "tailwindcss": "3.4.19",
+    "typescript": "5.9.3",
+    "vitest": "3.2.4"
+  }
+}

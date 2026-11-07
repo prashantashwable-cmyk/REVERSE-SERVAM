@@ -1,0 +1,17 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+}
+
+body {
+  @apply bg-silver-100 font-sans text-navy-900 antialiased;
+}
+
+/* Visible keyboard focus everywhere (accessibility, §58). */
+:focus-visible {
+  outline: 2px solid #b38f3e;
+  outline-offset: 2px;
+}
