@@ -2230,7 +2230,7 @@ export const mr: Record<MessageKey, string> = {
   'qa.final_title': 'अंतिम गुणवत्ता तपासणी',
   'qa.first_inspection': 'पहिली तपासणी',
   'qa.history': 'तपासणीचा इतिहास',
-  'qa.imported': 'अपलोड केलेली फाईल (अॅपमधील कॅमेरा नव्हे)',
+  'qa.imported': 'अपलोड केलेली फाईल (ॲपमधील कॅमेरा नव्हे)',
   'qa.inspect_hint': 'प्रत्येक निकषाचे उत्तर द्या. अयोग्य निकषासाठी दोष नोंदवा; महत्त्वाचे निकष वगळता येत नाहीत.',
   'qa.inspect_title': 'तपासणी करा',
   'qa.inspection_failed': 'तपासणी अनुत्तीर्ण; भागीदाराला कळवले.',
