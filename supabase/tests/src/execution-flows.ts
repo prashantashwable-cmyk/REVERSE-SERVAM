@@ -37,20 +37,25 @@ export function executionFlows(pool: pg.Pool, fx: Fixture) {
     return u!.id;
   }
 
-  /** A fresh partner company with its admin and one technician (enrolled by the admin, tenant-scoped). */
-  async function newPartner(label = `Partner ${randomUUID().slice(0, 8)}`) {
+  /** A fresh partner company with its admin and technicians (enrolled by the admin, tenant-scoped). */
+  async function newPartner(label = `Partner ${randomUUID().slice(0, 8)}`, names: { admin?: string; technicians?: string[]; city?: string } = {}) {
     const owner = as('owner');
-    const org = await owner.rpc<string>('admin_create_organization', { p_kind: 'partner', p_name: label, p_legal_name: null, p_city: 'Pune', p_reason: 'test partner' });
-    const adminId = await newUser(`${label} admin`);
-    const techId = await newUser(`${label} technician`);
-    await owner.rpc('admin_add_member', { p_user_id: adminId, p_org_id: org, p_reason: 'test' });
-    await owner.rpc('admin_grant_role', { p_user_id: adminId, p_org_id: org, p_role_code: 'partner_admin', p_reason: 'test' });
-    await owner.rpc('admin_set_user_status', { p_user_id: adminId, p_status: 'active', p_reason: 'test' });
+    const org = await owner.rpc<string>('admin_create_organization', { p_kind: 'partner', p_name: label, p_legal_name: null, p_city: names.city ?? 'Pune', p_reason: 'new partner company' });
+    const adminId = await newUser(names.admin ?? `${label} admin`);
+    await owner.rpc('admin_add_member', { p_user_id: adminId, p_org_id: org, p_reason: 'partner administrator' });
+    await owner.rpc('admin_grant_role', { p_user_id: adminId, p_org_id: org, p_role_code: 'partner_admin', p_reason: 'partner administrator' });
+    await owner.rpc('admin_set_user_status', { p_user_id: adminId, p_status: 'active', p_reason: 'identity verified' });
     const pa = new Session(pool, adminId);
-    await pa.rpc('admin_add_member', { p_user_id: techId, p_org_id: org, p_reason: 'new technician' });
-    await pa.rpc('admin_grant_role', { p_user_id: techId, p_org_id: org, p_role_code: 'technician', p_reason: 'new technician' });
-    await pa.rpc('admin_set_user_status', { p_user_id: techId, p_status: 'active', p_reason: 'identity verified' });
-    return { org, adminId, techId, admin: pa, tech: new Session(pool, techId) };
+    const techIds: string[] = [];
+    for (const name of names.technicians ?? [`${label} technician`]) {
+      const id = await newUser(name);
+      await pa.rpc('admin_add_member', { p_user_id: id, p_org_id: org, p_reason: 'new technician' });
+      await pa.rpc('admin_grant_role', { p_user_id: id, p_org_id: org, p_role_code: 'technician', p_reason: 'new technician' });
+      await pa.rpc('admin_set_user_status', { p_user_id: id, p_status: 'active', p_reason: 'identity verified' });
+      techIds.push(id);
+    }
+    const techId = techIds[0]!;
+    return { org, adminId, techId, techIds, admin: pa, tech: new Session(pool, techId) };
   }
 
   const PROFILE = {
@@ -70,10 +75,18 @@ export function executionFlows(pool: pg.Pool, fx: Fixture) {
       mime_type: 'application/pdf', size_bytes: 4096, ...over } });
   }
 
+  type PartnerNames = Parameters<typeof newPartner>[1] & { label?: string; profile?: Record<string, unknown> };
+
+  type PartnerHandle = Awaited<ReturnType<typeof newPartner>>;
+
+  /** An existing partner organization (e.g. from the fixture) as a handle for the flows below. */
+  function partnerHandle(org: string, adminId: string, techIds: string[]): PartnerHandle {
+    return { org, adminId, techId: techIds[0]!, techIds, admin: new Session(pool, adminId), tech: new Session(pool, techIds[0]!) };
+  }
+
   /** Profile → four required documents → submit → AIEC verifies each and approves (Gate 7 satisfied). */
-  async function approvedPartner(skills: string[] = ['general', 'mechanical', 'electrical', 'testing']) {
-    const p = await newPartner();
-    await p.admin.rpc('save_partner_profile', { p_org_id: p.org, p_expected_version: null, p_payload: PROFILE });
+  async function approvePartner(p: PartnerHandle, skills: string[], profile: Record<string, unknown> = {}) {
+    await p.admin.rpc('save_partner_profile', { p_org_id: p.org, p_expected_version: null, p_payload: { ...PROFILE, ...profile } });
     const docs = [];
     for (const t of ['contractor_licence', 'insurance', 'pan', 'bank_verification']) docs.push(await addDocument(p, t));
     const s = await p.admin.rpc('partner_action', { p_org_id: p.org, p_expected_version: await version('partner_profiles', p.org), p_action: 'submit' });
@@ -81,13 +94,37 @@ export function executionFlows(pool: pg.Pool, fx: Fixture) {
     await owner.rpc('partner_action', { p_org_id: p.org, p_expected_version: s.version, p_action: 'start_verification' });
     for (const d of docs) await owner.rpc('verify_partner_document', { p_document_id: d.document_id, p_decision: 'verify' });
     await owner.rpc('partner_action', { p_org_id: p.org, p_expected_version: await version('partner_profiles', p.org), p_action: 'approve' });
-    await p.admin.rpc('set_worker_profile', { p_org_id: p.org, p_user_id: p.techId, p_skills: skills, p_training_note: 'Induction and harness training done' });
+    for (const id of p.techIds) await p.admin.rpc('set_worker_profile', { p_org_id: p.org, p_user_id: id, p_skills: skills, p_training_note: 'Induction and harness training done' });
     return { ...p, documents: docs };
   }
 
+  async function approvedPartner(skills: string[] = ['general', 'mechanical', 'electrical', 'testing']) {
+    return approvePartner(await newPartner(), skills);
+  }
+
+  /** Add a technician to an existing partner, enrolled by its admin. */
+  async function enrolTechnician(p: PartnerHandle, name: string) {
+    const id = await newUser(name);
+    await p.admin.rpc('admin_add_member', { p_user_id: id, p_org_id: p.org, p_reason: 'new technician' });
+    await p.admin.rpc('admin_grant_role', { p_user_id: id, p_org_id: p.org, p_role_code: 'technician', p_reason: 'new technician' });
+    await p.admin.rpc('admin_set_user_status', { p_user_id: id, p_status: 'active', p_reason: 'identity verified' });
+    p.techIds.push(id);
+    return id;
+  }
+
+  interface ProjectOptions {
+    /** Lead payload overrides (names, site). */
+    lead?: Record<string, unknown>;
+    /** Issue revision 1, then revise (customer negotiation) and accept revision 2 with this discount. */
+    reviseWithDiscountBps?: number;
+    /** Leave the project waiting for Operations to accept the handover. */
+    skipHandoverAcceptance?: boolean;
+    contractReference?: string;
+  }
+
   /** Accepted quotation → order → project in planning (Operations accepted the handover). */
-  async function planningProject() {
-    const s = await base.submittedSurvey();
+  async function planningProject(o: ProjectOptions = {}) {
+    const s = await base.submittedSurvey('sales1', 'surveyor1', o.lead);
     const tech = as('tech1');
     const r = await tech.rpc('start_technical_review', { p_survey_id: s.surveyId });
     await tech.rpc('decide_technical_review', { p_review_id: r.review_id, p_expected_version: r.version, p_decision: 'feasible', p_payload: { technical_basis: 'Fits' } });
@@ -96,15 +133,27 @@ export function executionFlows(pool: pg.Pool, fx: Fixture) {
     const sales = as('sales1');
     const q = await sales.rpc('create_quotation', { p_operation_id: randomUUID(), p_lead_id: s.leadId });
     const line = { category: 'lift_equipment', description: 'MRL lift', quantity_milli: 1000, unit: 'nos', rate_paise: '1000000000', discount_bps: 0, tax_code: 'GST18', estimated_unit_cost_paise: '700000000' };
-    const sv = await sales.rpc('save_quotation_draft', { p_revision_id: q.revision_id, p_expected_version: q.version, p_lines: [line], p_terms: TERMS, p_valid_until: inDays(20) });
-    const sub = await sales.rpc('submit_quotation', { p_revision_id: q.revision_id, p_expected_version: sv.version });
-    const iss = await sales.rpc('issue_quotation', { p_revision_id: q.revision_id, p_expected_version: sub.version });
-    await sales.rpc('record_customer_response', { p_revision_id: q.revision_id, p_expected_version: iss.version, p_response: 'accept',
+    const issue = async (revisionId: string, version: number, discountBps: number) => {
+      const sv = await sales.rpc('save_quotation_draft', { p_revision_id: revisionId, p_expected_version: version, p_lines: [{ ...line, discount_bps: discountBps }], p_terms: TERMS, p_valid_until: inDays(20) });
+      const sub = await sales.rpc('submit_quotation', { p_revision_id: revisionId, p_expected_version: sv.version });
+      return sales.rpc('issue_quotation', { p_revision_id: revisionId, p_expected_version: sub.version });
+    };
+    let revisionId = q.revision_id as string;
+    let iss = await issue(revisionId, q.version, 0);
+    if (o.reviseWithDiscountBps !== undefined) {
+      await sales.rpc('add_quotation_negotiation', { p_quotation_id: q.quotation_id, p_payload: {
+        occurred_at: new Date().toISOString(), contact: 'Mr. Rao, Secretary', topic: 'Committee asked for a lower price before signing', requested_change: 'Discount on the lift equipment line',
+        requested_discount_bps: o.reviseWithDiscountBps, decision: 'Revised quotation to be issued' } });
+      const rev = await sales.rpc('revise_quotation', { p_quotation_id: q.quotation_id, p_reason: 'Negotiated discount agreed with the committee' });
+      revisionId = rev.revision_id;
+      iss = await issue(revisionId, rev.version, o.reviseWithDiscountBps);
+    }
+    await sales.rpc('record_customer_response', { p_revision_id: revisionId, p_expected_version: iss.version, p_response: 'accept',
       p_payload: { accepted_by_name: 'Mr. Rao', acceptor_authority: 'Secretary', channel: 'signed_copy', evidence: 'Signed copy', content_sha256: iss.content_sha256 } });
-    const p = await sales.rpc('convert_quotation_to_order', { p_operation_id: randomUUID(), p_revision_id: q.revision_id,
-      p_payload: { contract_reference: 'AGR-2026-501', contract_date: today(), milestone_template: 'new_installation', handover_checklist: CHECKLIST } });
-    await as('ops1').rpc('acknowledge_project_handover', { p_project_id: p.project_id, p_expected_version: p.version, p_notes: 'Received' });
-    return { ...s, projectId: p.project_id as string };
+    const p = await sales.rpc('convert_quotation_to_order', { p_operation_id: randomUUID(), p_revision_id: revisionId,
+      p_payload: { contract_reference: o.contractReference ?? 'AGR-2026-501', contract_date: today(), milestone_template: 'new_installation', handover_checklist: CHECKLIST } });
+    if (!o.skipHandoverAcceptance) await as('ops1').rpc('acknowledge_project_handover', { p_project_id: p.project_id, p_expected_version: p.version, p_notes: 'Received' });
+    return { ...s, projectId: p.project_id as string, quotationId: q.quotation_id as string };
   }
 
   async function verifiedMilestone(projectId: string, code: string) {
@@ -152,18 +201,18 @@ export function executionFlows(pool: pg.Pool, fx: Fixture) {
   }
 
   /** Project in planning with an accepted, eligible partner and the technician on the team. */
-  async function acceptedAssignment() {
-    const p = await approvedPartner();
-    const project = await planningProject();
+  async function acceptedAssignment(o: ProjectOptions & { partner?: Awaited<ReturnType<typeof approvedPartner>> } = {}) {
+    const p = o.partner ?? (await approvedPartner());
+    const project = await planningProject(o);
     const inv = await as('ops1').rpc('invite_partner', { p_project_id: project.projectId, p_partner_org_id: p.org, p_payload: { ...OFFER, schedule_from: inDays(5), schedule_to: inDays(40) } });
     await p.admin.rpc('assignment_action', { p_assignment_id: inv.assignment_id, p_expected_version: inv.version, p_action: 'accept', p_offer_sha256: inv.offer_sha256 });
-    await p.admin.rpc('set_project_team_member', { p_assignment_id: inv.assignment_id, p_user_id: p.techId, p_action: 'add' });
+    for (const id of p.techIds) await p.admin.rpc('set_project_team_member', { p_assignment_id: inv.assignment_id, p_user_id: id, p_action: 'add' });
     return { partner: p, project, assignmentId: inv.assignment_id as string };
   }
 
   /** …and installation started (site ready, drawing approved, material received, pre-dispatch verified). */
-  async function installingProject() {
-    const a = await acceptedAssignment();
+  async function installingProject(o: Parameters<typeof acceptedAssignment>[0] = {}) {
+    const a = await acceptedAssignment(o);
     const pid = a.project.projectId;
     await as('ops1').rpc('record_site_readiness', { p_project_id: pid, p_items: ALL_SITE_PASS });
     await approvedDocument(a.project.leadId);
@@ -202,6 +251,6 @@ export function executionFlows(pool: pg.Pool, fx: Fixture) {
     return t.id;
   }
 
-  return { ...base, as, version, newUser, newPartner, addDocument, approvedPartner, planningProject, verifiedMilestone, materialReceived, approvedDocument, PROFILE,
+  return { ...base, as, version, newUser, newPartner, partnerHandle, approvePartner, enrolTechnician, addDocument, approvedPartner, planningProject, verifiedMilestone, materialReceived, approvedDocument, PROFILE,
     acceptedAssignment, installingProject, taskByCode, taskEvidence, submitTask };
 }

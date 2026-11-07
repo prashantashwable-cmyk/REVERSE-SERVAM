@@ -34,9 +34,9 @@ export function flows(pool: pg.Pool, fx: Fixture) {
     return { start: start.toISOString(), end: new Date(start.getTime() + 2 * 3600e3).toISOString() };
   };
 
-  async function qualifiedLead(owner: UserKey = 'sales1') {
+  async function qualifiedLead(owner: UserKey = 'sales1', lead: Record<string, unknown> = {}) {
     const s = as(owner);
-    const r = await s.rpc('create_lead', { p_operation_id: randomUUID(), p_payload: leadPayload() });
+    const r = await s.rpc('create_lead', { p_operation_id: randomUUID(), p_payload: leadPayload(lead) });
     const c = await s.rpc('record_lead_activity', {
       p_operation_id: randomUUID(), p_lead_id: r.lead_id, p_activity_type: 'call', p_outcome: 'survey_required',
       p_summary: 'Needs site survey', p_occurred_at: new Date().toISOString(), p_next_follow_up_at: new Date(Date.now() + 864e5).toISOString(),
@@ -69,8 +69,8 @@ export function flows(pool: pg.Pool, fx: Fixture) {
   }
 
   /** Qualified lead → scheduled → accepted → checked in → complete → submitted (Gate 1 passed). */
-  async function submittedSurvey(owner: UserKey = 'sales1', surveyor: UserKey = 'surveyor1') {
-    const leadId = await qualifiedLead(owner);
+  async function submittedSurvey(owner: UserKey = 'sales1', surveyor: UserKey = 'surveyor1', lead: Record<string, unknown> = {}) {
+    const leadId = await qualifiedLead(owner, lead);
     const { start, end } = nextSlot();
     const s = await as(owner).rpc('schedule_survey', {
       p_operation_id: randomUUID(), p_lead_id: leadId, p_surveyor_id: fx.users[surveyor], p_scheduled_start: start,

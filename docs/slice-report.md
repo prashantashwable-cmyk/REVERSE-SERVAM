@@ -142,6 +142,10 @@ Not run here: web flows against a hosted Supabase project (the E2E gateway stand
 - Open business decisions: see `docs/decision-register.md` (D-004…D-007, D-010, D-011, D-020 are blocking for later slices).
 - Statutory, engineering and legal criteria (survey requirement set, partner documents, warranty event) must be validated by qualified professionals before production use.
 
+### Demo data (§63)
+
+`npm run seed:demo` builds a local `aiec_demo` database and fills it through the real RPCs with the §63 sample set: 5 projects across stages, 2 partner companies (one missing its insurance certificate), 6 technicians, 10 leads in every pipeline status, 3 quotations with accepted second revisions, 3 POs, 2 QA defects (one closed through a rework loop), verified / pending / rejected payments and a project blocked by site readiness. See `docs/demo-data.md`. `test/demo-data.test.ts` checks every item (DB suite: **81 passed**).
+
 ## 9. Next recommended work
 
-All six slices of the launch scope are built. Recommended next: (1) the Android technician app (WT01–WT09 offline with GPS, sharing the web rules), (2) warranty service and AMC (complaints, service visits, renewals), (3) the business decisions still open in `docs/decision-register.md` and native-speaker / qualified-engineer review of the Marathi text and QA checklists, (4) a hosted Supabase staging project with SMS OTP and Storage exercised end to end.
+All six slices of the launch scope and the §63 demo data are built. Recommended next: (1) the Android technician app (WT01–WT09 offline with GPS, sharing the web rules), (2) warranty service and AMC (complaints, service visits, renewals), (3) the business decisions still open in `docs/decision-register.md` and native-speaker / qualified-engineer review of the Marathi text and QA checklists, (4) a hosted Supabase staging project with SMS OTP and Storage exercised end to end.

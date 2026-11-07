@@ -91,7 +91,7 @@ Application id `in.aiec.field`. Field data (cached work package, drafts, evidenc
 
 ## Documentation
 
-- [Repository audit](docs/repository-audit.md) · [Slice report](docs/slice-report.md)
+- [Repository audit](docs/repository-audit.md) · [Slice report](docs/slice-report.md) · [Demo data](docs/demo-data.md) (`npm run seed:demo`)
 - [Decision register](docs/decision-register.md) · [Traceability matrix](docs/traceability-matrix.md)
 - [Permission matrix](docs/permission-matrix.md) · [State machines](docs/state-machines.md) — generated: `npm run docs:generate --workspace @aiec/domain`
 - [API contracts](docs/api-contracts.md)
