@@ -48,6 +48,21 @@ import {
   purchaseOrderMachine,
   allocate,
   computePurchaseOrder,
+  PARTNER_STATES,
+  ASSIGNMENT_STATES,
+  TASK_STATES,
+  partnerMachine,
+  assignmentMachine,
+  taskMachine,
+  DEFAULT_PARTNER_REQUIREMENTS,
+  DEFAULT_TASK_TEMPLATE,
+  DEFAULT_SAFETY_CHECKS,
+  SITE_READINESS_ITEMS,
+  evaluatePartnerCompliance,
+  evaluateSiteReadiness,
+  evaluateSafetyPreStart,
+  safetyChecksFromAnswers,
+  requirementsForProject,
 } from '@aiec/domain';
 import { admin, makePool } from '../src/db';
 
@@ -93,6 +108,9 @@ describe('DB ↔ domain parity', () => {
     expect(await enumLabels('material_state')).toEqual([...MATERIAL_STATES]);
     expect(await enumLabels('purchase_request_state')).toEqual([...PURCHASE_REQUEST_STATES]);
     expect(await enumLabels('purchase_order_state')).toEqual([...PURCHASE_ORDER_STATES]);
+    expect(await enumLabels('partner_state')).toEqual([...PARTNER_STATES]);
+    expect(await enumLabels('assignment_state')).toEqual([...ASSIGNMENT_STATES]);
+    expect(await enumLabels('task_state')).toEqual([...TASK_STATES]);
   });
 
   it('state transition tables equal the domain machines', async () => {
@@ -100,7 +118,7 @@ describe('DB ↔ domain parity', () => {
       pool,
       'select machine, from_state, action, to_state, permission_code, requires_reason, audit_event from public.state_transitions',
     );
-    for (const m of [leadMachine, surveyMachine, technicalReviewMachine, documentRevisionMachine, quotationMachine, orderMachine, projectMachine, paymentMachine, materialLineMachine, bomMachine, purchaseRequestMachine, purchaseOrderMachine] as const) {
+    for (const m of [leadMachine, surveyMachine, technicalReviewMachine, documentRevisionMachine, quotationMachine, orderMachine, projectMachine, paymentMachine, materialLineMachine, bomMachine, purchaseRequestMachine, purchaseOrderMachine, partnerMachine, assignmentMachine, taskMachine] as const) {
       const expected = m.transitions
         .flatMap((t) => t.from.map((f) => `${f}|${t.action}|${t.to}|${t.permission}|${!!t.requiresReason}|${t.auditEvent}`))
         .sort();
@@ -194,6 +212,44 @@ describe('DB ↔ domain parity', () => {
       const expected = JSON.parse(JSON.stringify(computePurchaseOrder(lines, freight), (_k, v) => (typeof v === 'bigint' ? v.toString() : v)));
       const [po] = await admin<{ v: unknown }>(pool, 'select app.compute_purchase_order($1, $2) as v', [JSON.stringify(lines.map((l) => ({ ...l, ratePaise: l.ratePaise.toString() }))), freight.toString()]);
       expect(po!.v).toEqual(expected);
+    }
+  });
+
+  it('Slice 5 rules, Gate 7 compliance, Gate 8 site readiness and the safety pre-start equal the domain', async () => {
+    const rule = async (k: string) => (await admin<{ v: any }>(pool, 'select app.rule($1) as v', [k]))[0]!.v;
+    expect(await rule('partner.document_requirements')).toEqual({ documents: DEFAULT_PARTNER_REQUIREMENTS });
+    expect(await rule('execution.task_template')).toEqual({ tasks: DEFAULT_TASK_TEMPLATE });
+    expect(await rule('execution.safety_checks')).toEqual({ checks: DEFAULT_SAFETY_CHECKS });
+    expect(await rule('execution.site_readiness_items')).toEqual({ items: SITE_READINESS_ITEMS });
+    let seed = 23;
+    const rnd = (n: number) => { seed = (seed * 1103515245 + 12345) % 2147483648; return seed % n; };
+    const types = ['contractor_licence', 'insurance', 'pan', 'bank_verification', 'gst_registration'];
+    const ver = ['pending', 'verified', 'rejected'] as const;
+    const dates = [null, '2026-01-01', '2026-11-06', '2026-11-07', '2027-05-01'];
+    const scopes = [[], ['passenger'], ['goods'], ['passenger', 'goods'], ['hospital', 'home']];
+    for (let i = 0; i < 60; i++) {
+      const docs = Array.from({ length: rnd(7) }, () => ({ type: types[rnd(types.length)]!, verification: ver[rnd(3)]!, expiresOn: dates[rnd(dates.length)]!, scope: scopes[rnd(scopes.length)]! }));
+      const cat = [null, 'passenger', 'goods', 'hospital'][rnd(4)] ?? null;
+      const reqs = requirementsForProject(DEFAULT_PARTNER_REQUIREMENTS, cat);
+      const expected = evaluatePartnerCompliance(docs, reqs, '2026-11-07').map((fl) => { const [type, reason] = fl.message.split(': '); return { type, reason }; });
+      const [row] = await admin<{ v: unknown; r: unknown }>(pool, `select app.evaluate_partner_compliance($1, $2, '2026-11-07'::date) as v, app.partner_requirements($3) as r`, [JSON.stringify(docs), JSON.stringify(reqs), cat]);
+      expect(row!.v, JSON.stringify({ docs, cat })).toEqual(expected);
+      expect(row!.r).toEqual(reqs);
+      // Site readiness: random answers over the catalogue (some missing, some N/A with or without a reason).
+      const results = ['pass', 'pass', 'pass', 'fail', 'not_applicable', 'awaiting_evidence'] as const;
+      const items = SITE_READINESS_ITEMS.filter(() => rnd(10) > 0).map((it) => {
+        const result = results[rnd(results.length)]!;
+        return { key: it.key, group: it.group, result, note: result === 'not_applicable' && rnd(2) ? 'Not needed on this site' : null };
+      });
+      const dom = evaluateSiteReadiness(items);
+      const [sr] = await admin<{ v: { passed: boolean; failures: { code: string; key: string }[] } }>(pool, 'select app.evaluate_site_readiness($1) as v', [JSON.stringify(items)]);
+      expect(sr!.v.passed).toBe(dom.passed);
+      expect(sr!.v.failures.map((x) => `${x.code}:${x.key}`)).toEqual(dom.failures.map((x) => `${x.code}:${(x.fields ?? x.missing)![0]}`));
+      // Safety pre-start: the recorded can_start equals the domain.
+      const answers = Object.fromEntries(DEFAULT_SAFETY_CHECKS.filter(() => rnd(8) > 0).map((c) => [c.key, { applicable: rnd(6) > 0, confirmed: rnd(4) > 0 }]));
+      const ds = evaluateSafetyPreStart(safetyChecksFromAnswers(answers));
+      const [sc] = await admin<{ v: { criticalFailures: string[]; warnings: string[] } }>(pool, 'select app.evaluate_safety_check($1) as v', [JSON.stringify(answers)]);
+      expect(sc!.v).toEqual({ criticalFailures: ds.criticalFailures, warnings: ds.warnings });
     }
   });
 });
