@@ -1255,10 +1255,10 @@ begin
   end if;
   if not exists (select 1 from public.project_team_members m where m.assignment_id = v_a.id and m.user_id = p_assignee_id and m.removed_at is null)
      or not app.user_has_permission(p_assignee_id, 'task.execute', v_a.partner_org_id) then
-    perform app.raise_error('VALIDATION_FAILED', jsonb_build_object('fields', jsonb_build_array('assignee_id'), 'reason', 'not an active technician of this project team'));
+    perform app.raise_error('VALIDATION_FAILED', jsonb_build_object('fields', jsonb_build_array('task_assignee_id'), 'reason', 'not an active technician of this project team'));
   end if;
   if not exists (select 1 from public.partner_workers w where w.user_id = p_assignee_id and w.organization_id = v_a.partner_org_id and v_t.skill = any (w.skills)) then
-    perform app.raise_error('VALIDATION_FAILED', jsonb_build_object('fields', jsonb_build_array('assignee_id'), 'reason', 'the person does not have the required skill', 'skill', v_t.skill));
+    perform app.raise_error('VALIDATION_FAILED', jsonb_build_object('fields', jsonb_build_array('task_assignee_id'), 'reason', 'the person does not have the required skill', 'skill', v_t.skill));
   end if;
   if p_due_date is not null and p_due_date < app.today_ist() then perform app.j_field_error('due_date'); end if;
   if v_t.status = 'draft' then

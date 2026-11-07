@@ -156,7 +156,7 @@ export async function ExecutionSection({ project, ctx, t, locale }: { project: a
                 <tr>
                   <th className="py-1 pr-3">{t('execution.col_task')}</th>
                   <th className="py-1 pr-3">{t('common.status')}</th>
-                  <th className="py-1 pr-3">{t('field.assignee_id')}</th>
+                  <th className="py-1 pr-3">{t('field.task_assignee_id')}</th>
                   <th className="py-1 pr-3">{t('field.due_date')}</th>
                 </tr>
               </thead>

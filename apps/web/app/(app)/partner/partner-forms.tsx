@@ -148,7 +148,7 @@ export function AssignTaskForm({ taskId, version, people, minDate }: { taskId: s
   const { t, field: f } = useT();
   return (
     <ActionForm action={assignTaskAction} hidden={{ task_id: taskId, version }} submitLabel={t('partner.assign_task')} secondary className="grid grid-cols-1 gap-2 md:grid-cols-2">
-      <Field label={f('assignee_id')} htmlFor={`as_${taskId}`} required>
+      <Field label={f('task_assignee_id')} htmlFor={`as_${taskId}`} required>
         <select id={`as_${taskId}`} name="assignee_id" className={inputClass}>{people.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}</select>
       </Field>
       <Field label={f('due_date')} htmlFor={`due_${taskId}`}><input id={`due_${taskId}`} name="due_date" type="date" min={minDate} className={inputClass} /></Field>

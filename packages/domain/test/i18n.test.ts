@@ -51,6 +51,22 @@ import {
   projectMachine,
   purchaseOrderMachine,
   purchaseRequestMachine,
+  partnerMachine,
+  assignmentMachine,
+  taskMachine,
+  PARTNER_STATES,
+  ASSIGNMENT_STATES,
+  TASK_STATES,
+  PARTNER_DOCUMENT_TYPES,
+  PARTNER_ENTITY_TYPES,
+  WORKER_SKILLS,
+  TASK_EVIDENCE_CATEGORIES,
+  CHECKLIST_RESULTS,
+  BLOCKER_CATEGORIES,
+  READINESS_DIMENSIONS,
+  SITE_READINESS_ITEMS,
+  DEFAULT_SAFETY_CHECKS,
+  DEFAULT_TASK_TEMPLATE,
 } from '../src';
 import { en } from '../src/messages/en';
 import { mr } from '../src/messages/mr';
@@ -135,6 +151,24 @@ describe('every value the interface renders has a label in both languages', () =
     ...['quotation_discount', 'purchase_order', 'payment_exception'].flatMap((k) => [`approvals.kind.${k}`, `approvals.consequence.${k}`]),
     ...['confirm', 'mark_ready', 'dispatch', 'mark_delivered'].map((a) => `action.material.${a}`),
     ...['verify', 'verify_partially', 'request_clarification', 'reject'].flatMap((d) => [`payment.decision.${d}`, `payment.decided_${d}`]),
+    // Slice 5: partners, assignments, tasks, safety, readiness.
+    ...[partnerMachine, assignmentMachine, taskMachine].flatMap((m) => m.transitions.flatMap((tr) => [`action.${tr.action}`, `audit.action.${tr.auditEvent}`])),
+    ...PARTNER_STATES.map((s) => `partner.state.${s}`),
+    ...ASSIGNMENT_STATES.map((s) => `execution.assignment_state.${s}`),
+    ...TASK_STATES.map((s) => `work.state.${s}`),
+    ...PARTNER_DOCUMENT_TYPES.map((d) => `enum.partner_document.${d}`),
+    ...PARTNER_ENTITY_TYPES.map((e) => `enum.entity_type.${e}`),
+    ...WORKER_SKILLS.map((s) => `enum.skill.${s}`),
+    ...TASK_EVIDENCE_CATEGORIES.map((c) => `enum.task_evidence.${c}`),
+    ...CHECKLIST_RESULTS.map((r) => `enum.checklist_result.${r}`),
+    ...BLOCKER_CATEGORIES.map((b) => `enum.blocker.${b}`),
+    ...READINESS_DIMENSIONS.map((d) => `execution.dimension.${d}`),
+    ...SITE_READINESS_ITEMS.flatMap((i) => [`execution.site_item.${i.key}`, `execution.site_group.${i.group}`]),
+    ...DEFAULT_SAFETY_CHECKS.map((c) => `work.safety.${c.key}`),
+    ...DEFAULT_TASK_TEMPLATE.flatMap((t) => [`work.task.${t.code}`, ...t.checklist.map((c) => `work.check.${c}`)]),
+    ...['expired', 'verification_pending', 'rejected', 'scope_insufficient', 'missing'].map((r) => `partners.reason.${r}`),
+    ...['pending', 'verified', 'rejected'].map((v) => `partners.verification.${v}`),
+    ...['REQUIRED_FIELD_MISSING', 'SITE_NOT_READY', 'EVIDENCE_REQUIRED'].map((c) => `execution.site_failure.${c}`),
   ];
   it.each(required)('%s', (key) => {
     expect(hasMessage(key)).toBe(true);
@@ -151,6 +185,7 @@ describe('every value the interface renders has a label in both languages', () =
     expect(fieldLabel('terms.exclusions', 'mr')).toBe('समाविष्ट नसलेल्या बाबी');
     expect(fieldLabel('lines.2.rate_paise', 'en')).toBe('Line 2: Rate');
     expect(fieldLabel('lines.3', 'mr')).toBe('ओळ 3');
+    expect(fieldLabel('checklist.rails_aligned', 'en')).toBe('Rails aligned');
   });
 
   it('Gate 1 failures and warnings carry translatable message keys', () => {

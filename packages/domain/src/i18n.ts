@@ -58,6 +58,7 @@ export function fieldLabel(key: string, locale: Locale = DEFAULT_LOCALE): string
   const candidates = [
     `field.${key}`,
     key.startsWith('measurement.') ? `measure.${key.slice('measurement.'.length)}` : '',
+    key.startsWith('checklist.') ? `work.check.${key.slice('checklist.'.length)}` : '',
     `enum.evidence.${key}`,
     `action.${key}`,
   ].filter(Boolean);
