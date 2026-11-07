@@ -11,6 +11,7 @@ import { partnerMembership } from '@/lib/partner';
 import { staffNames } from '@/lib/people';
 import { supabaseServer } from '@/lib/supabase/server';
 import { AddTeamMemberForm, AssignTaskForm, DailyReportForm, InvitationResponseForm, RemoveTeamMemberForm, UnblockTaskForm } from '../../partner-forms';
+import { DefectActionForm } from '../../../work/work-forms';
 
 export async function generateMetadata() {
   const { t } = await getT();
@@ -43,6 +44,9 @@ export default async function PartnerAssignmentPage({ params }: { params: Promis
     accepted && can(ctx, 'partner.team.manage') ? supabase.from('user_roles').select('user_id, role_code').eq('organization_id', m.organization_id).is('revoked_at', null).in('role_code', ['technician', 'partner_supervisor']) : Promise.resolve({ data: [] as any[] }),
     accepted ? supabase.from('partner_workers').select('user_id, skills').eq('organization_id', m.organization_id) : Promise.resolve({ data: [] as any[] }),
   ]);
+  const taskIds = (tasks ?? []).map((x: any) => x.id);
+  const { data: defects } = taskIds.length ? await supabase.from('defects').select('*').in('task_id', taskIds).order('raised_at') : { data: [] as any[] };
+  const taskCode = new Map((tasks ?? []).map((x: any) => [x.id, x.code]));
   const reportIds = (reports ?? []).map((r: any) => r.id);
   const { data: comments } = reportIds.length ? await supabase.from('daily_report_comments').select('*').in('report_id', reportIds).order('created_at') : { data: [] as any[] };
   const activeTeam = (team ?? []).filter((x: any) => !x.removed_at);
@@ -128,6 +132,31 @@ export default async function PartnerAssignmentPage({ params }: { params: Promis
             </ul>
             <p className="mt-2 text-xs text-silver-700">{t('partner.qa_note')}</p>
           </Card>
+
+          {(defects ?? []).length > 0 ? (
+            <Card title={t('partner.defects')} className="mt-4">
+              <p className="mb-2 text-sm text-silver-700">{t('partner.defects_intro')}</p>
+              <ul className="flex flex-col gap-2 text-sm">
+                {(defects ?? []).map((d: any) => (
+                  <li key={d.id} className="rounded-md border border-silver-200 p-2">
+                    <p className="flex flex-wrap items-center gap-2">
+                      <span className="font-mono text-xs">{d.defect_number}</span>
+                      <StateBadge state={d.status} labelText={t(`qa.defect_state.${d.status}`)} />
+                      <Badge tone={d.severity === 'critical' ? 'crit' : 'warn'}>{t(`enum.defect_severity.${d.severity}`)}</Badge>
+                      <span>{t(`work.task.${taskCode.get(d.task_id)}`)} · {t(`qa.criterion.${d.criterion_key}`)}</span>
+                    </p>
+                    <p className="text-silver-700">{d.location} · {d.description} · {t('qa.due', { date: d.correction_due_date })}{d.status_reason ? ` · ${d.status_reason}` : ''}</p>
+                    {can(ctx, 'partner.task.assign') && d.status === 'assigned' ? (
+                      <div className="mt-2 grid grid-cols-1 gap-2 md:grid-cols-2">
+                        <DefectActionForm defectId={d.id} version={d.version} action="acknowledge" />
+                        <DefectActionForm defectId={d.id} version={d.version} action="dispute" withReason />
+                      </div>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            </Card>
+          ) : null}
 
           {(incidents ?? []).length > 0 ? (
             <Card title={t('execution.incidents_title')} className="mt-4">

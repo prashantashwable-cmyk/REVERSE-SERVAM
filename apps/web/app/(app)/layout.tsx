@@ -21,6 +21,8 @@ const NAV: { href: string; labelKey: string; anyOf: PermissionCode[] }[] = [
   { href: '/partner/company', labelKey: 'nav.partner_company', anyOf: ['partner.org.manage'] },
   { href: '/partner/team', labelKey: 'nav.partner_team', anyOf: ['partner.team.manage'] },
   { href: '/work', labelKey: 'nav.work', anyOf: ['task.execute'] },
+  { href: '/qa', labelKey: 'nav.qa', anyOf: ['qa.inspection.decide'] },
+  { href: '/customer', labelKey: 'nav.customer', anyOf: ['customer.project.read'] },
   { href: '/procurement', labelKey: 'nav.procurement', anyOf: ['procurement.request.create', 'procurement.po.create', 'procurement.grn.record', 'procurement.po.approve'] },
   { href: '/finance', labelKey: 'nav.finance', anyOf: ['finance.payment.verify', 'finance.ledger.read'] },
   { href: '/approvals', labelKey: 'nav.approvals', anyOf: ['quotation.discount.approve', 'procurement.po.approve', 'approval.exception.decide'] },

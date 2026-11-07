@@ -53,12 +53,17 @@ export function errorMessage(code: ErrorCode, locale: Locale = DEFAULT_LOCALE): 
  */
 export function fieldLabel(key: string, locale: Locale = DEFAULT_LOCALE): string {
   // Row-level errors from list editors, e.g. "lines.2.rate_paise" → "Line 2: Rate".
-  const row = /^lines\.(\d+)(?:\.([a-z_]+))?$/.exec(key);
-  if (row) return row[2] ? `${t('field.line_ref', locale, { no: row[1]! })}: ${fieldLabel(row[2], locale)}` : t('field.line_ref', locale, { no: row[1]! });
+  // "defects.1.location" → "Defect 1: Exact location".
+  const row = /^(lines|defects)\.(\d+)(?:\.([a-z_]+))?$/.exec(key);
+  if (row) {
+    const ref = t(row[1] === 'defects' ? 'field.defect_ref' : 'field.line_ref', locale, { no: row[2]! });
+    return row[3] ? `${ref}: ${fieldLabel(row[3], locale)}` : ref;
+  }
   const candidates = [
     `field.${key}`,
     key.startsWith('measurement.') ? `measure.${key.slice('measurement.'.length)}` : '',
     key.startsWith('checklist.') ? `work.check.${key.slice('checklist.'.length)}` : '',
+    key.startsWith('qa.') ? `qa.criterion.${key.slice('qa.'.length)}` : '',
     `enum.evidence.${key}`,
     `action.${key}`,
   ].filter(Boolean);

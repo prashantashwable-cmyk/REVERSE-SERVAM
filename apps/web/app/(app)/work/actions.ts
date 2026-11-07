@@ -68,7 +68,7 @@ export async function uploadEvidenceAction(_: ActionState, form: FormData): Prom
       category: str(form, 'category'), storage_path: path, sha256: createHash('sha256').update(bytes).digest('hex'), mime_type: file.type,
       // The file's own time (never later than now); the server keeps its receipt time separately.
       size_bytes: file.size, captured_at: new Date(Math.min(file.lastModified || Date.now(), Date.now())).toISOString(),
-      source: 'document_import', remarks: str(form, 'remarks'),
+      source: 'document_import', remarks: str(form, 'remarks'), defect_id: uuid(form, 'defect_id'),
     },
   });
   if (error) return errorState(error);
@@ -88,4 +88,14 @@ export async function reportIncidentAction(_: ActionState, form: FormData): Prom
   });
   if (error) return errorState(error);
   return success((data as { safety_stop: boolean }).safety_stop ? 'work.safety_stop_reported' : 'work.blocker_reported', data as Record<string, unknown>);
+}
+
+/** WT06 / LP12: defect steps (acknowledge / dispute by the partner, start / submit correction by the technician). */
+export async function defectAction(_: ActionState, form: FormData): Promise<ActionState> {
+  const action = str(form, 'action');
+  return rpc('defect_action', { p_defect_id: uuid(form, 'defect_id'), p_expected_version: int(form, 'version'), p_action: action, p_reason: str(form, 'reason') }, `work.defect_${action ?? 'acknowledge'}_done`);
+}
+
+export async function resubmitTaskAction(_: ActionState, form: FormData): Promise<ActionState> {
+  return rpc('resubmit_task', { p_task_id: uuid(form, 'task_id'), p_expected_version: int(form, 'version') }, 'work.resubmitted');
 }

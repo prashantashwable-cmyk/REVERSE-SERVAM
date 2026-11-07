@@ -5,7 +5,7 @@ import { ActionForm } from '@/components/action-form';
 import { useT } from '@/components/locale';
 import { inputClass } from '@/components/ui';
 import { Field } from '@/components/ui-client';
-import { acceptTaskAction, reportIncidentAction, safetyCheckAction, saveProgressAction, startTaskAction, submitTaskAction, uploadEvidenceAction } from './actions';
+import { acceptTaskAction, defectAction, reportIncidentAction, resubmitTaskAction, safetyCheckAction, saveProgressAction, startTaskAction, submitTaskAction, uploadEvidenceAction } from './actions';
 
 export function AcceptTaskButton({ taskId, version }: { taskId: string; version: number }) {
   const { t } = useT();
@@ -83,4 +83,30 @@ export function IncidentForm({ taskId, operationId }: { taskId: string; operatio
       <Field label={f('description')} htmlFor="inc_description" required><input id="inc_description" name="description" className={inputClass} /></Field>
     </ActionForm>
   );
+}
+
+/** LP12 / WT06: one defect step. Dispute needs a reason. */
+export function DefectActionForm({ defectId, version, action, withReason }: { defectId: string; version: number; action: 'acknowledge' | 'dispute' | 'start_correction' | 'submit_correction'; withReason?: boolean }) {
+  const { t, field: f } = useT();
+  return (
+    <ActionForm action={defectAction} hidden={{ defect_id: defectId, version, action }} submitLabel={t(`action.${action}`)} secondary={action === 'dispute'} className="flex flex-col gap-2">
+      {withReason ? <Field label={f('reason')} htmlFor={`dr_${defectId}_${action}`} required><input id={`dr_${defectId}_${action}`} name="reason" className={inputClass} /></Field> : null}
+    </ActionForm>
+  );
+}
+
+/** Correction photo linked to its defect (original evidence is kept). */
+export function CorrectionEvidenceForm({ taskId, partnerOrgId, defectId, operationId }: { taskId: string; partnerOrgId: string; defectId: string; operationId: string }) {
+  const { t, field: f } = useT();
+  return (
+    <ActionForm action={uploadEvidenceAction} hidden={{ task_id: taskId, partner_org_id: partnerOrgId, operation_id: operationId, defect_id: defectId, category: 'correction' }} formKey={operationId} submitLabel={t('work.add_correction_photo')} secondary className="grid grid-cols-1 gap-2 md:grid-cols-2">
+      <Field label={f('photo')} htmlFor={`cf_${defectId}`} required><input id={`cf_${defectId}`} name="file" type="file" accept="image/jpeg,image/png,image/webp,image/heic" capture="environment" className={inputClass} /></Field>
+      <Field label={f('remarks')} htmlFor={`cr_${defectId}`}><input id={`cr_${defectId}`} name="remarks" className={inputClass} /></Field>
+    </ActionForm>
+  );
+}
+
+export function ResubmitTaskButton({ taskId, version }: { taskId: string; version: number }) {
+  const { t } = useT();
+  return <ActionForm action={resubmitTaskAction} hidden={{ task_id: taskId, version }} submitLabel={t('work.resubmit')} />;
 }

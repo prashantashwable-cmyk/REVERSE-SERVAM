@@ -19,6 +19,7 @@ import {
   ResubmitClaimForm,
 } from '../project-forms';
 import { ExecutionSection } from './execution';
+import { QualitySection } from './quality';
 
 export async function generateMetadata() {
   const { t } = await getT();
@@ -367,6 +368,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
       {(['project.read_all', 'project.plan', 'partner.assign'] as const).some((x) => can(ctx, x)) && !['created', 'cancelled'].includes(p.status) ? (
         <ExecutionSection project={p} ctx={ctx} t={t} locale={locale} />
       ) : null}
+      {(['project.read_all', 'project.plan'] as const).some((x) => can(ctx, x)) ? <QualitySection project={p} ctx={ctx} t={t} locale={locale} /> : null}
 
       {!milestones?.length && !order && !shownBom ? <EmptyState title={t('project.limited_view')} /> : null}
     </>

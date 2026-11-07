@@ -8,7 +8,7 @@ import { getContext } from '@/lib/context';
 import { dt } from '@/lib/format';
 import { getT } from '@/lib/i18n';
 import { supabaseServer } from '@/lib/supabase/server';
-import { AcceptTaskButton, ChecklistForm, EvidenceForm, IncidentForm, SafetyCheckForm, StartTaskButton, SubmitTaskButton } from '../work-forms';
+import { AcceptTaskButton, ChecklistForm, CorrectionEvidenceForm, DefectActionForm, EvidenceForm, IncidentForm, ResubmitTaskButton, SafetyCheckForm, StartTaskButton, SubmitTaskButton } from '../work-forms';
 
 export async function generateMetadata() {
   const { t } = await getT();
@@ -29,12 +29,13 @@ export default async function WorkTaskPage({ params }: { params: Promise<{ id: s
   if (error) return <ErrorPanel code={fromServerError(error).code} />;
   if (!task) notFound();
   const mine = task.assignee_user_id === ctx.user_id;
-  const [{ data: project }, { data: checks }, { data: evidence }, { data: prereqs }, { data: stops }] = await Promise.all([
+  const [{ data: project }, { data: checks }, { data: evidence }, { data: prereqs }, { data: stops }, { data: defects }] = await Promise.all([
     supabase.from('projects').select('id, project_number, title, site_label, status').eq('id', task.project_id).maybeSingle(),
     supabase.from('task_safety_checks').select('*').eq('task_id', id).order('recorded_at', { ascending: false }).limit(1),
-    supabase.from('task_evidence').select('id, category, captured_at, server_received_at, remarks, source').eq('task_id', id).order('server_received_at'),
+    supabase.from('task_evidence').select('id, category, captured_at, server_received_at, remarks, source, defect_id').eq('task_id', id).order('server_received_at'),
     task.prerequisites?.length ? supabase.from('project_tasks').select('code, status').eq('project_id', task.project_id).in('code', task.prerequisites) : Promise.resolve({ data: [] as any[] }),
     supabase.from('execution_incidents').select('reported_at, resolved_at').eq('task_id', id).eq('safety_stop', true),
+    supabase.from('defects').select('*').eq('task_id', id).order('raised_at'),
   ]);
   // The partner org owns the evidence folder; it is the organization in the assignee's partner membership.
   const partnerOrg = ctx.memberships.find((m) => m.organization_kind === 'partner')?.organization_id ?? '';
@@ -124,6 +125,43 @@ export default async function WorkTaskPage({ params }: { params: Promise<{ id: s
             <SubmitTaskButton taskId={task.id} version={task.version} />
           </Card>
         </>
+      ) : null}
+
+      {mine && task.status === 'rework' ? (
+        <Card title={t('work.rework_title')} className="mt-4">
+          <p className="mb-3 text-sm text-silver-700">{t('work.rework_intro')}</p>
+          <ul className="flex flex-col gap-3 text-sm">
+            {(defects ?? []).filter((d: any) => d.status !== 'closed').map((d: any) => {
+              const photos = (evidence ?? []).filter((e: any) => e.defect_id === d.id).length;
+              return (
+                <li key={d.id} className="rounded-md border border-silver-200 p-3">
+                  <p className="flex flex-wrap items-center gap-2">
+                    <span className="font-mono text-xs">{d.defect_number}</span>
+                    <StateBadge state={d.status} labelText={t(`qa.defect_state.${d.status}`)} />
+                    <span className="font-semibold">{t(`qa.criterion.${d.criterion_key}`)}</span>
+                  </p>
+                  <p>{d.location} · {d.description}</p>
+                  <p className="text-silver-700">{t('qa.due', { date: d.correction_due_date })} · {t('work.correction_photos', { n: photos })}{d.status_reason ? ` · ${t('work.qa_says', { reason: d.status_reason })}` : ''}</p>
+                  {d.status === 'assigned' ? <p className="mt-1 text-warn-700">{t('work.wait_acknowledge')}</p> : null}
+                  {d.status === 'disputed' ? <p className="mt-1 text-warn-700">{t('work.disputed_wait')}</p> : null}
+                  {d.status === 'acknowledged' ? <div className="mt-2"><DefectActionForm defectId={d.id} version={d.version} action="start_correction" /></div> : null}
+                  {d.status === 'correction_in_progress' ? (
+                    <div className="mt-2 flex flex-col gap-2">
+                      <CorrectionEvidenceForm taskId={task.id} partnerOrgId={partnerOrg} defectId={d.id} operationId={randomUUID()} />
+                      {photos > 0 ? <DefectActionForm defectId={d.id} version={d.version} action="submit_correction" /> : null}
+                    </div>
+                  ) : null}
+                </li>
+              );
+            })}
+          </ul>
+          {(defects ?? []).every((d: any) => ['submitted_for_reinspection', 'verified', 'closed'].includes(d.status)) ? (
+            <div className="mt-4 border-t border-silver-200 pt-4">
+              <p className="mb-2 text-sm text-silver-700">{t('work.resubmit_hint')}</p>
+              <ResubmitTaskButton taskId={task.id} version={task.version} />
+            </div>
+          ) : null}
+        </Card>
       ) : null}
 
       {mine && task.status === 'submitted' ? (

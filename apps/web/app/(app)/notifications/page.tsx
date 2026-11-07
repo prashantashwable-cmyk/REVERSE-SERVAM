@@ -45,6 +45,10 @@ export default async function NotificationsPage() {
               const href = n.event_type === 'approval.decided' && (n.payload as { kind?: string } | null)?.kind === 'purchase_order'
                 ? '/procurement'
                 : n.entity_type === 'partner' ? (n.event_type.startsWith('partner_document.registered') || n.event_type === 'partner.submitted' ? `/partners/${n.entity_id}` : '/partner/company')
+                : n.event_type === 'handover.ready' ? `/customer/projects/${n.entity_id}`
+                : n.event_type === 'qa.final_requested' ? `/qa/projects/${n.entity_id}`
+                : n.event_type === 'task.resubmitted' ? `/qa/tasks/${n.entity_id}`
+                : n.event_type.startsWith('qa.qa_') ? `/work/${n.entity_id}`
                 : n.entity_type === 'partner_assignment' ? `/partner/assignments/${n.entity_id}`
                 : n.entity_type === 'task' && n.event_type !== 'task.assigned' ? '/partner'
                 : n.entity_type === 'project' && ((n.event_type.startsWith('project.') && n.event_type !== 'project.created') || n.event_type === 'daily_report.commented') ? '/partner'

@@ -96,6 +96,19 @@ export default async function Home() {
   if (can(ctx, 'task.execute')) {
     kpis.push({ key: 'my_open_tasks', href: '/work', count: await tableCount('project_tasks', (q) => q.eq('assignee_user_id', ctx.user_id).in('status', ['assigned', 'accepted', 'in_progress', 'blocked', 'rework'])) });
   }
+  if (can(ctx, 'qa.inspection.decide')) {
+    kpis.push({ key: 'qa_to_inspect', href: '/qa', count: await tableCount('project_tasks', (q) => q.eq('status', 'submitted')) });
+    kpis.push({ key: 'final_qa_requests', href: '/qa', count: await tableCount('projects', (q) => q.eq('status', 'final_qa')) });
+  }
+  if (can(ctx, 'project.plan')) {
+    kpis.push({ key: 'open_defects', href: '/projects?status=installation', count: await tableCount('defects', (q) => q.not('status', 'in', '(verified,closed)')) });
+  }
+  if (can(ctx, 'approval.exception.decide')) {
+    kpis.push({ key: 'statutory_to_verify', href: '/projects?status=statutory_pending', count: await tableCount('statutory_evidence', (q) => q.eq('verification', 'pending')) });
+  }
+  if (can(ctx, 'customer.project.read')) {
+    kpis.push({ key: 'handover_to_accept', href: '/customer', count: await tableCount('handovers', (q) => q.eq('status', 'ready')) });
+  }
   if (can(ctx, 'survey.schedule')) {
     kpis.push({ key: 'reschedule_requests', href: '/surveys?status=reschedule_requested', count: await surveyCount('reschedule_requested') });
   }

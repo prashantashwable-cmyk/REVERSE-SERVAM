@@ -67,6 +67,21 @@ import {
   SITE_READINESS_ITEMS,
   DEFAULT_SAFETY_CHECKS,
   DEFAULT_TASK_TEMPLATE,
+  defectMachine,
+  handoverMachine,
+  warrantyMachine,
+  DEFECT_STATES,
+  HANDOVER_STATES,
+  WARRANTY_STATES,
+  DEFAULT_QA_CHECKLISTS,
+  QA_RESULTS,
+  INSPECTION_OUTCOMES,
+  DEFECT_CATEGORIES,
+  DEFECT_SEVERITIES,
+  STATUTORY_EVIDENCE_TYPES,
+  WARRANTY_START_EVENTS,
+  DEFAULT_HANDOVER_DOCUMENTS,
+  PROJECT_STATES as ALL_PROJECT_STATES,
 } from '../src';
 import { en } from '../src/messages/en';
 import { mr } from '../src/messages/mr';
@@ -169,6 +184,20 @@ describe('every value the interface renders has a label in both languages', () =
     ...['expired', 'verification_pending', 'rejected', 'scope_insufficient', 'missing'].map((r) => `partners.reason.${r}`),
     ...['pending', 'verified', 'rejected'].map((v) => `partners.verification.${v}`),
     ...['REQUIRED_FIELD_MISSING', 'SITE_NOT_READY', 'EVIDENCE_REQUIRED'].map((c) => `execution.site_failure.${c}`),
+    // Slice 6: QA, defects, statutory evidence, handover, warranty, customer portal.
+    ...[defectMachine, handoverMachine, warrantyMachine].flatMap((m) => m.transitions.flatMap((tr) => [`action.${tr.action}`, `audit.action.${tr.auditEvent}`])),
+    ...DEFECT_STATES.map((s) => `qa.defect_state.${s}`),
+    ...HANDOVER_STATES.map((s) => `handover.state.${s}`),
+    ...WARRANTY_STATES.map((s) => `handover.warranty_state.${s}`),
+    ...Object.values(DEFAULT_QA_CHECKLISTS).flatMap((cs) => cs.map((c) => `qa.criterion.${c.key}`)),
+    ...QA_RESULTS.map((r) => `enum.qa_result.${r}`),
+    ...INSPECTION_OUTCOMES.map((o) => `qa.outcome.${o}`),
+    ...DEFECT_CATEGORIES.map((c) => `enum.defect_category.${c}`),
+    ...DEFECT_SEVERITIES.map((c) => `enum.defect_severity.${c}`),
+    ...STATUTORY_EVIDENCE_TYPES.map((c) => `enum.statutory.${c}`),
+    ...WARRANTY_START_EVENTS.map((c) => `enum.warranty_event.${c}`),
+    ...DEFAULT_HANDOVER_DOCUMENTS.map((c) => `enum.handover_document.${c}`),
+    ...ALL_PROJECT_STATES.map((s) => `customer.stage.${s}`),
   ];
   it.each(required)('%s', (key) => {
     expect(hasMessage(key)).toBe(true);
@@ -186,6 +215,8 @@ describe('every value the interface renders has a label in both languages', () =
     expect(fieldLabel('lines.2.rate_paise', 'en')).toBe('Line 2: Rate');
     expect(fieldLabel('lines.3', 'mr')).toBe('ओळ 3');
     expect(fieldLabel('checklist.rails_aligned', 'en')).toBe('Rails aligned');
+    expect(fieldLabel('defects.1.location', 'en')).toBe('Defect 1: Exact location');
+    expect(fieldLabel('qa.door_gaps', 'en')).toBe('Door gaps');
   });
 
   it('Gate 1 failures and warnings carry translatable message keys', () => {
