@@ -63,6 +63,18 @@ import {
   evaluateSafetyPreStart,
   safetyChecksFromAnswers,
   requirementsForProject,
+  DEFECT_STATES,
+  HANDOVER_STATES,
+  WARRANTY_STATES,
+  defectMachine,
+  handoverMachine,
+  warrantyMachine,
+  DEFAULT_QA_CHECKLISTS,
+  DEFAULT_STATUTORY_REQUIRED,
+  DEFAULT_HANDOVER_DOCUMENTS,
+  DEFAULT_WARRANTY_TERMS,
+  evaluateInspection,
+  warrantyPeriod,
 } from '@aiec/domain';
 import { admin, makePool } from '../src/db';
 
@@ -111,6 +123,9 @@ describe('DB ↔ domain parity', () => {
     expect(await enumLabels('partner_state')).toEqual([...PARTNER_STATES]);
     expect(await enumLabels('assignment_state')).toEqual([...ASSIGNMENT_STATES]);
     expect(await enumLabels('task_state')).toEqual([...TASK_STATES]);
+    expect(await enumLabels('defect_state')).toEqual([...DEFECT_STATES]);
+    expect(await enumLabels('handover_state')).toEqual([...HANDOVER_STATES]);
+    expect(await enumLabels('warranty_state')).toEqual([...WARRANTY_STATES]);
   });
 
   it('state transition tables equal the domain machines', async () => {
@@ -118,7 +133,7 @@ describe('DB ↔ domain parity', () => {
       pool,
       'select machine, from_state, action, to_state, permission_code, requires_reason, audit_event from public.state_transitions',
     );
-    for (const m of [leadMachine, surveyMachine, technicalReviewMachine, documentRevisionMachine, quotationMachine, orderMachine, projectMachine, paymentMachine, materialLineMachine, bomMachine, purchaseRequestMachine, purchaseOrderMachine, partnerMachine, assignmentMachine, taskMachine] as const) {
+    for (const m of [leadMachine, surveyMachine, technicalReviewMachine, documentRevisionMachine, quotationMachine, orderMachine, projectMachine, paymentMachine, materialLineMachine, bomMachine, purchaseRequestMachine, purchaseOrderMachine, partnerMachine, assignmentMachine, taskMachine, defectMachine, handoverMachine, warrantyMachine] as const) {
       const expected = m.transitions
         .flatMap((t) => t.from.map((f) => `${f}|${t.action}|${t.to}|${t.permission}|${!!t.requiresReason}|${t.auditEvent}`))
         .sort();
@@ -250,6 +265,32 @@ describe('DB ↔ domain parity', () => {
       const ds = evaluateSafetyPreStart(safetyChecksFromAnswers(answers));
       const [sc] = await admin<{ v: { criticalFailures: string[]; warnings: string[] } }>(pool, 'select app.evaluate_safety_check($1) as v', [JSON.stringify(answers)]);
       expect(sc!.v).toEqual({ criticalFailures: ds.criticalFailures, warnings: ds.warnings });
+    }
+  });
+
+  it('Slice 6 rules, inspection outcomes and warranty dates equal the domain', async () => {
+    const rule = async (k: string) => (await admin<{ v: any }>(pool, 'select app.rule($1) as v', [k]))[0]!.v;
+    expect(await rule('qa.checklists')).toEqual({ checklists: DEFAULT_QA_CHECKLISTS });
+    expect(await rule('statutory.required_evidence')).toEqual({ types: DEFAULT_STATUTORY_REQUIRED });
+    expect(await rule('handover.required_documents')).toEqual({ documents: DEFAULT_HANDOVER_DOCUMENTS });
+    expect(await rule('warranty.terms')).toEqual(DEFAULT_WARRANTY_TERMS);
+    let seed = 31;
+    const rnd = (n: number) => { seed = (seed * 1103515245 + 12345) % 2147483648; return seed % n; };
+    const keys = Object.keys(DEFAULT_QA_CHECKLISTS);
+    const results = ['pass', 'pass', 'pass', 'fail', 'hold', 'not_applicable', 'bogus'];
+    for (let i = 0; i < 60; i++) {
+      const criteria = DEFAULT_QA_CHECKLISTS[keys[rnd(keys.length)]!]!;
+      const answers = Object.fromEntries(criteria.filter(() => rnd(12) > 0).map((c) => [c.key, { result: results[rnd(results.length)], note: rnd(2) ? 'Reason given' : null }]));
+      const dom = evaluateInspection(criteria, answers as never);
+      const [row] = await admin<{ v: { outcome: string | null; problems: { code: string; key: string }[]; failed: string[]; held: string[] } }>(pool, 'select app.evaluate_inspection($1, $2) as v', [JSON.stringify(criteria), JSON.stringify(answers)]);
+      expect(row!.v.outcome, JSON.stringify(answers)).toBe(dom.outcome);
+      expect(row!.v.problems.map((x) => `${x.code}:${x.key}`)).toEqual(dom.problems.map((x) => `${x.code}:${x.fields![0]}`));
+      expect(row!.v.failed).toEqual(dom.failed);
+      expect(row!.v.held).toEqual(dom.held);
+      const start = new Date(Date.UTC(2024 + rnd(4), rnd(12), 1 + rnd(31))).toISOString().slice(0, 10);
+      const months = 1 + rnd(60);
+      const [w] = await admin<{ e: string }>(pool, 'select app.warranty_end($1::date, $2)::text as e', [start, months]);
+      expect(w!.e, `${start} + ${months}`).toBe(warrantyPeriod(start, months).end);
     }
   });
 });

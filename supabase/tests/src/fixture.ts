@@ -14,6 +14,7 @@ export const USERS = [
   'pending1',
   'finance1',
   'procure1',
+  'qa1',
 ] as const;
 export type UserKey = (typeof USERS)[number];
 

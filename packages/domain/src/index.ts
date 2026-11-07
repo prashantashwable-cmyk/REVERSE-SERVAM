@@ -15,3 +15,4 @@ export * from './i18n';
 export * from './analytics';
 export * from './lead-scoring';
 export * from './execution';
+export * from './quality';

@@ -151,5 +151,57 @@ export function executionFlows(pool: pg.Pool, fx: Fixture) {
     await as('tech1').rpc('decide_document_revision', { p_revision_id: d.document_revision_id, p_expected_version: s.version, p_decision: 'approve', p_reviewed_sha256: sha });
   }
 
-  return { ...base, as, version, newUser, newPartner, addDocument, approvedPartner, planningProject, verifiedMilestone, materialReceived, approvedDocument, PROFILE };
+  /** Project in planning with an accepted, eligible partner and the technician on the team. */
+  async function acceptedAssignment() {
+    const p = await approvedPartner();
+    const project = await planningProject();
+    const inv = await as('ops1').rpc('invite_partner', { p_project_id: project.projectId, p_partner_org_id: p.org, p_payload: { ...OFFER, schedule_from: inDays(5), schedule_to: inDays(40) } });
+    await p.admin.rpc('assignment_action', { p_assignment_id: inv.assignment_id, p_expected_version: inv.version, p_action: 'accept', p_offer_sha256: inv.offer_sha256 });
+    await p.admin.rpc('set_project_team_member', { p_assignment_id: inv.assignment_id, p_user_id: p.techId, p_action: 'add' });
+    return { partner: p, project, assignmentId: inv.assignment_id as string };
+  }
+
+  /** …and installation started (site ready, drawing approved, material received, pre-dispatch verified). */
+  async function installingProject() {
+    const a = await acceptedAssignment();
+    const pid = a.project.projectId;
+    await as('ops1').rpc('record_site_readiness', { p_project_id: pid, p_items: ALL_SITE_PASS });
+    await approvedDocument(a.project.leadId);
+    await materialReceived(pid);
+    await verifiedMilestone(pid, 'pre_dispatch');
+    const r = await as('ops1').rpc('project_execution_action', { p_project_id: pid, p_expected_version: await version('projects', pid), p_action: 'mark_installation_ready' });
+    await as('ops1').rpc('project_execution_action', { p_project_id: pid, p_expected_version: r.version, p_action: 'start_installation' });
+    return a;
+  }
+
+  async function taskByCode(projectId: string, code: string) {
+    const [t] = await admin<{ id: string; version: number; status: string; checklist: string[]; evidence_required: string[] }>(pool,
+      'select id, version, status, checklist, evidence_required from public.project_tasks where project_id = $1 and code = $2', [projectId, code]);
+    return t!;
+  }
+
+  async function taskEvidence(a: Awaited<ReturnType<typeof installingProject>>, taskId: string, category: string, defectId: string | null = null) {
+    const op = randomUUID();
+    const path = `${a.partner.org}/tasks/${taskId}/${op}.jpg`;
+    await a.partner.tech.query(`insert into storage.objects (bucket_id, name, owner, metadata) values ('execution-evidence', $1, $2, $3)`, [path, a.partner.techId, { size: 3000, mimetype: 'image/jpeg' }]);
+    return a.partner.tech.rpc('register_task_evidence', { p_operation_id: op, p_task_id: taskId, p_payload: {
+      category, defect_id: defectId, storage_path: path, sha256: createHash('sha256').update(op).digest('hex'), mime_type: 'image/jpeg', size_bytes: 3000,
+      captured_at: new Date().toISOString(), source: 'in_app_camera' } });
+  }
+
+  /** Assign → accept → safety → start → full checklist → required photos → submit (Gate 9). */
+  async function submitTask(a: Awaited<ReturnType<typeof installingProject>>, code: string) {
+    const t = await taskByCode(a.project.projectId, code);
+    const asg = await a.partner.admin.rpc('assign_task', { p_task_id: t.id, p_expected_version: t.version, p_assignee_id: a.partner.techId });
+    const acc = await a.partner.tech.rpc('accept_task', { p_task_id: t.id, p_expected_version: asg.version });
+    await a.partner.tech.rpc('record_safety_check', { p_operation_id: randomUUID(), p_task_id: t.id, p_answers: ALL_SAFE });
+    const st = await a.partner.tech.rpc('start_task', { p_task_id: t.id, p_expected_version: acc.version });
+    const sp = await a.partner.tech.rpc('save_task_progress', { p_task_id: t.id, p_expected_version: st.version, p_answers: Object.fromEntries(t.checklist.map((k) => [k, { done: true }])) });
+    for (const c of t.evidence_required) await taskEvidence(a, t.id, c);
+    await a.partner.tech.rpc('submit_task', { p_task_id: t.id, p_expected_version: sp.version });
+    return t.id;
+  }
+
+  return { ...base, as, version, newUser, newPartner, addDocument, approvedPartner, planningProject, verifiedMilestone, materialReceived, approvedDocument, PROFILE,
+    acceptedAssignment, installingProject, taskByCode, taskEvidence, submitTask };
 }

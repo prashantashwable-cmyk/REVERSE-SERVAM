@@ -54,6 +54,7 @@ export const BUSINESS_ID_PREFIXES = {
   goods_receipt: 'GRN',
   payment: 'PM',
   inspection: 'IN',
+  lift_asset: 'LA',
 } as const;
 
 export type BusinessEntity = keyof typeof BUSINESS_ID_PREFIXES;

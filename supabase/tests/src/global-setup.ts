@@ -67,6 +67,7 @@ export default async function setup(project: TestProject) {
   await grant('ops1', aiec, 'operations_manager');
   await grant('finance1', aiec, 'accounts_finance');
   await grant('procure1', aiec, 'procurement_manager');
+  await grant('qa1', aiec, 'qa_inspector');
   await grant('partnerA_admin', partnerA, 'partner_admin');
   await grant('partnerB_admin', partnerB, 'partner_admin');
   await grant('customer1', customer, 'customer');
