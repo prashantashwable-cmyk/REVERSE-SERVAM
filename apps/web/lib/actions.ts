@@ -34,8 +34,14 @@ export function localError(code: ErrorCode, fields: string[] = []): ActionState 
   return { status: 'error', code, fields, missing: [], details: {} };
 }
 
-export function success(messageKey: string): ActionState {
-  return { status: 'success', messageKey };
+export function success(messageKey: string, data?: Record<string, unknown>): ActionState {
+  return data ? { status: 'success', messageKey, data } : { status: 'success', messageKey };
+}
+
+/** One entry per non-empty line of a textarea (lists such as constraints). */
+export function lines(form: FormData, key: string): string[] {
+  const v = form.get(key);
+  return typeof v === 'string' ? v.split(/\r?\n/).map((x) => x.trim()).filter(Boolean) : [];
 }
 
 /** FormData helpers: trimmed string or null. */

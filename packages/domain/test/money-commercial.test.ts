@@ -157,3 +157,26 @@ describe('payment milestone engine and Gate 5', () => {
     expect(paymentGate('procurement', s, [], { approvedBy: 'owner', expiresAt: '2026-11-01T00:00:00Z', now }).open).toBe(false);
   });
 });
+
+describe('quantity and percentage input helpers', () => {
+  it('parse and format exactly, rejecting invalid input', async () => {
+    const { parseQuantityMilli, formatQuantityMilli, parsePercentBps, formatBps, paiseToInput } = await import('../src');
+    expect(parseQuantityMilli('1')).toBe(1000);
+    expect(parseQuantityMilli(' 12.5 ')).toBe(12500);
+    expect(parseQuantityMilli('0.125')).toBe(125);
+    for (const bad of ['0', '-1', '1.2345', 'abc', '', '1e3']) expect(() => parseQuantityMilli(bad), bad).toThrow(RangeError);
+    expect(formatQuantityMilli(12500)).toBe('12.5');
+    expect(formatQuantityMilli(1000)).toBe('1');
+    expect(formatQuantityMilli(125)).toBe('0.125');
+    expect(parsePercentBps('')).toBe(0);
+    expect(parsePercentBps('5')).toBe(500);
+    expect(parsePercentBps('12.5')).toBe(1250);
+    expect(parsePercentBps('0.25')).toBe(25);
+    for (const bad of ['100.01', '-1', '1.234', 'x']) expect(() => parsePercentBps(bad), bad).toThrow(RangeError);
+    expect(formatBps(1250)).toBe('12.5');
+    expect(formatBps(500)).toBe('5');
+    expect(formatBps(25)).toBe('0.25');
+    expect(paiseToInput(125000050n)).toBe('1250000.5');
+    expect(paiseToInput(100n)).toBe('1');
+  });
+});

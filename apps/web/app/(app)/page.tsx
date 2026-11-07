@@ -56,6 +56,19 @@ export default async function Home() {
     kpis.push({ key: 'surveys_awaiting_review', href: '/surveys?status=submitted', count: await surveyCount('submitted') });
     kpis.push({ key: 'surveys_returned', href: '/surveys?status=revision_requested', count: await surveyCount('revision_requested') });
   }
+  const tableCount = async (table: string, build: (q: any) => any): Promise<number | null> => {
+    const { count: c, error } = await build(supabase.from(table).select('id', { count: 'exact', head: true }));
+    return error ? null : (c ?? 0);
+  };
+  if (can(ctx, 'technical.review')) {
+    kpis.push({ key: 'reviews_open', href: '/technical', count: await tableCount('technical_reviews', (q) => q.in('status', ['in_review', 'clarification_requested', 'insufficient_information'])) });
+  }
+  if (can(ctx, 'quotation.discount.approve')) {
+    kpis.push({ key: 'approvals_pending', href: '/approvals', count: await tableCount('approval_requests', (q) => q.eq('status', 'pending')) });
+  }
+  if (can(ctx, 'quotation.create')) {
+    kpis.push({ key: 'quotations_issued', href: '/quotations?status=issued', count: await tableCount('quotation_revisions', (q) => q.eq('status', 'issued')) });
+  }
   if (can(ctx, 'survey.schedule')) {
     kpis.push({ key: 'reschedule_requests', href: '/surveys?status=reschedule_requested', count: await surveyCount('reschedule_requested') });
   }

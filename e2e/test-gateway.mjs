@@ -178,11 +178,13 @@ function send(res, status, body, headers = {}) {
 
 http
   .createServer(async (req, res) => {
-    let body = '';
+    const chunks = [];
     const t0 = Date.now(); const tag = `${req.method} ${req.url.slice(0, 90)}`;
     console.log('START', tag);
     res.on('finish', () => console.log('END', Date.now() - t0, 'ms', res.statusCode, tag));
-    for await (const chunk of req) body += chunk;
+    for await (const chunk of req) chunks.push(Buffer.from(chunk));
+    const raw = Buffer.concat(chunks);
+    const body = raw.toString('utf8');
     const url = new URL(req.url, `http://127.0.0.1:${PORT}`);
     try {
       if (req.method === 'OPTIONS') return send(res, 204);
@@ -198,6 +200,19 @@ http
       if (url.pathname === '/auth/v1/user') return claims ? send(res, 200, userJson(claims.sub, claims.phone)) : send(res, 401, { code: 401, msg: 'invalid JWT' });
       if (url.pathname === '/auth/v1/logout') return send(res, 204);
       if (url.pathname === '/auth/v1/token') return send(res, 400, { error: 'invalid_grant' });
+      if (req.method === 'POST' && url.pathname.startsWith('/storage/v1/object/') && !url.pathname.startsWith('/storage/v1/object/sign/')) {
+        // Upload: record the object as the caller so storage RLS decides (bytes are not kept).
+        if (!claims) return send(res, 401, { statusCode: '401', error: 'Unauthorized', message: 'JWT expired' });
+        const [bucket, ...rest] = decodeURIComponent(url.pathname.slice('/storage/v1/object/'.length)).split('/');
+        const name = rest.join('/');
+        try {
+          await asUser(claims, (c) => c.query('insert into storage.objects (bucket_id, name, owner, metadata) values ($1, $2, $3, $4)',
+            [bucket, name, claims.sub, { size: raw.length, mimetype: req.headers['content-type'] ?? 'application/octet-stream' }]));
+        } catch (e) {
+          return send(res, 403, { statusCode: '403', error: 'Unauthorized', message: e.message });
+        }
+        return send(res, 200, { Key: `${bucket}/${name}`, Id: name });
+      }
       if (url.pathname.startsWith('/storage/v1/object/sign/')) {
         const { paths } = JSON.parse(body);
         return send(res, 200, paths.map((p) => ({ path: p, signedURL: `/object/sign/evidence/${p}?token=e2e`, error: null })));

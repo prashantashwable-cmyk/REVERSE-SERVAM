@@ -2,7 +2,7 @@
 
 Role-based operating system for **ALL INDIA ELEVATORS COMPANY** — from enquiry to survey, technical review, quotation, installation, independent QA, handover and warranty — built from the specification in [`AIEC_Role_Wise_Master_Prompt_v2_Deep_Implementation.md`](AIEC_Role_Wise_Master_Prompt_v2_Deep_Implementation.md).
 
-**Current state: Slices 1 and 2 of 6 are implemented end to end** (identity & access; lead → survey with offline field capture). Later slices exist as tested business rules in `packages/domain` only. See [`docs/slice-report.md`](docs/slice-report.md) for exactly what works, what was tested and what is not built yet.
+**Current state: Slices 1–3 of 6 are implemented end to end** (identity & access; lead → survey with offline field capture; technical review → configuration → controlled documents → quotation with Owner approval → recorded customer acceptance). Later slices exist as tested business rules in `packages/domain` only. See [`docs/slice-report.md`](docs/slice-report.md) for exactly what works, what was tested and what is not built yet.
 
 > Engineering, statutory and legal acceptance criteria in this system (survey requirements, partner documents, warranty events, inspection checklists) are configurable placeholders. They must be validated by qualified professionals and the relevant Maharashtra authority before production use. The software never grants statutory permission.
 

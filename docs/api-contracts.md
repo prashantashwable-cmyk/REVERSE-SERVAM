@@ -66,6 +66,32 @@ Operator-only (SQL editor, not exposed to API roles): `app.bootstrap_platform(ow
 | `request_survey_revision` | `p_survey_id`, `p_expected_version`, `p_reason` | `survey.review` | From submitted / under_review. Creates a new draft revision copying data and measurements | version | `survey.revision_requested`; notify surveyor |
 | `review_gps_exception` | `p_survey_id`, `p_decision` (`accepted`/`rejected`), `p_note` | `survey.gps_exception.review`, not the surveyor | Once per check-in | — | `survey.gps_exception_reviewed` |
 
+## Technical review, configuration and documents (Slice 3)
+
+| RPC | Arguments | Who | Behaviour | Audit / notify |
+|---|---|---|---|---|
+| `start_technical_review` | `p_survey_id` | `technical.review` | Survey `submitted → under_review`; creates the review (TR-…) or resumes one waiting for clarification / information; binds the current submitted revision | `survey.review_started`, `technical_review.started` / `.resumed` |
+| `request_technical_clarification` | `p_review_id`, `p_expected_version`, `p_reason` | `technical.review` | New draft survey revision back to the surveyor | `technical_review.clarification_requested`, `survey.revision_requested`; notifies surveyor |
+| `decide_technical_review` | `p_review_id`, `p_expected_version`, `p_decision` (`feasible`/`conditionally_feasible`/`not_feasible`/`insufficient_information`), `p_payload` {technical_basis, assumptions, references, constraints[], corrective_actions[], reason} | `technical.review` | Basis always; constraints + actions for conditional; reason for not feasible / insufficient. Survey → `reviewed` (or back to the surveyor for insufficient). Decision immutable | `technical_review.decided`; notifies lead owner |
+| `save_configuration_draft` | `p_lead_id`, `p_expected_version`, `p_lift_category`, `p_parameters` {key: {value, status proposed/reviewed}}, `p_change_summary` | `technical.review`, review in progress or feasible | One draft per lead; returns catalogue check (failures + warnings) | `configuration.saved` |
+| `approve_configuration` | `p_revision_id`, `p_expected_version` | `technical.configuration.approve`, feasible decision | Catalogue failures block; warnings kept; checksum; supersedes previous approved | `configuration.approved`; notifies lead owner |
+| `register_document_revision` | `p_operation_id`, `p_lead_id`, `p_document_id?`, `p_payload` {kind, title, storage_path, sha256, mime_type, size_bytes, change_summary, configuration_revision_id?} | `technical.review` | File must already be in `technical-documents` at `{org}/leads/{lead}/{operation_id}.{ext}`; idempotent; one open revision per document | `document.registered` |
+| `submit_document_revision` | `p_revision_id`, `p_expected_version` | `technical.review` | `draft → in_review` | `document.submitted`; notifies approvers |
+| `decide_document_revision` | `p_revision_id`, `p_expected_version`, `p_decision` (`approve`/`reject`), `p_reviewed_sha256`, `p_comment` | `technical.drawing.approve` | Approve only if the checksum matches; supersedes the previous approved revision; reject needs a comment | `document.approved` / `.rejected` / `.superseded` |
+
+## Quotations and approvals (Slice 3)
+
+| RPC | Arguments | Who | Behaviour | Audit / notify |
+|---|---|---|---|---|
+| `create_quotation` | `p_operation_id`, `p_lead_id` | lead owner with `quotation.create` | Qualified lead + approved configuration (Gate 2); one quotation (QT-…) per lead; revision 1 draft | `quotation.created` |
+| `save_quotation_draft` | `p_revision_id`, `p_expected_version`, `p_lines` [{category, description, quantity_milli, unit, rate_paise, discount_bps, tax_code, estimated_unit_cost_paise?, cost_source?}], `p_terms` {8 term keys}, `p_valid_until` | lead owner | Server computes every amount in paise and the discount authority (current policy) | `quotation.draft_saved` |
+| `submit_quotation` | `p_revision_id`, `p_expected_version` | lead owner | Within authority → `approved`; otherwise `pending_approval` + approval request | `quotation.finalized` / `.approval_requested`; notifies approvers |
+| `decide_quotation_approval` | `p_request_id`, `p_decision` (`approve`/`reject`/`more_info`), `p_reason` | `quotation.discount.approve`, never the requester | Reason for reject / more info; returns to draft unless approved | `approval.decided`, `quotation.approved` / `.approval_rejected`; notifies requester |
+| `issue_quotation` | `p_revision_id`, `p_expected_version` | lead owner with `quotation.issue` | Gate 3: all terms, validity not passed, configuration still approved; stores the SHA-256 of the customer-facing content | `quotation.issued` |
+| `record_customer_response` | `p_revision_id`, `p_expected_version`, `p_response` (`accept`/`reject`), `p_payload` {accepted_by_name, acceptor_authority, channel, evidence, comments, content_sha256 / reason} | lead owner with `quotation.issue` | Acceptance must name the issued content hash and be within validity; stored append-only | `quotation.accepted` / `.rejected_by_customer`; notifies Owner |
+| `revise_quotation` | `p_quotation_id`, `p_reason` | lead owner | New draft revision (copy, current approved configuration); supersedes the open one, withdraws a pending request; accepted quotations cannot be revised | `quotation.superseded`, `quotation.revised` |
+| `add_quotation_negotiation` | `p_quotation_id`, `p_payload` {occurred_at, contact, topic, requested_change, requested_discount_bps, expected_impact, decision} | lead owner | Append-only log | `quotation.negotiation_recorded` |
+
 ## Read access (RLS summary)
 
 | Data | Visible to |
@@ -80,3 +106,5 @@ Operator-only (SQL editor, not exposed to API roles): `app.bootstrap_platform(ow
 | Surveys, revisions, measurements, evidence metadata, sites (via survey) | `survey.read_all`; the assigned surveyor; whoever can read the lead |
 | Evidence files (storage) | same as the survey; uploads only by the assigned surveyor while `in_progress`; no update/delete |
 | Notifications, sync operations | the recipient / the operation's user |
+
+Slice 3 reads: technical records follow `technical.review` / `survey.read_all` in the organization, or the lead (sales owner, Owner); draft documents are technical-only. Quotations, lines (with internal cost), negotiations and acceptances follow the lead only: technical, field, partner and customer roles never see prices. Approval requests: approvers and the requester.

@@ -92,3 +92,44 @@ export function allocate(total: Paise, weights: readonly number[]): Paise[] {
   }
   return parts;
 }
+
+/** "1" / "12.5" / "0.125" → thousandths of a unit (integer). Throws on invalid or non-positive input. */
+export function parseQuantityMilli(input: string): number {
+  const m = /^(\d{1,9})(?:\.(\d{1,3}))?$/.exec(input.trim());
+  if (!m) throw new RangeError(`Invalid quantity: "${input}"`);
+  const milli = Number(m[1]) * 1000 + Number((m[2] ?? '').padEnd(3, '0'));
+  if (milli <= 0 || milli > 999_999_999) throw new RangeError(`Invalid quantity: "${input}"`);
+  return milli;
+}
+
+export function formatQuantityMilli(milli: number): string {
+  const whole = Math.trunc(milli / 1000);
+  const frac = String(milli % 1000).padStart(3, '0').replace(/0+$/, '');
+  return frac ? `${whole}.${frac}` : String(whole);
+}
+
+/** Percentage text ("5", "12.5", "0.25", "") → basis points (0–10000). Throws on invalid input. */
+export function parsePercentBps(input: string): BasisPoints {
+  const s = input.trim();
+  if (s === '') return 0;
+  const m = /^(\d{1,3})(?:\.(\d{1,2}))?$/.exec(s);
+  if (!m) throw new RangeError(`Invalid percentage: "${input}"`);
+  const bps = Number(m[1]) * 100 + Number((m[2] ?? '').padEnd(2, '0'));
+  if (bps > 10_000) throw new RangeError(`Invalid percentage: "${input}"`);
+  return bps;
+}
+
+/** 1250 → "12.5" (percent, no sign). */
+export function formatBps(bps: BasisPoints): string {
+  const whole = Math.trunc(bps / 100);
+  const frac = String(Math.abs(bps % 100)).padStart(2, '0').replace(/0+$/, '');
+  return frac ? `${whole}.${frac}` : String(whole);
+}
+
+/** Paise → plain rupee text for an input field ("1250000.5"), no grouping or symbol. */
+export function paiseToInput(paise: Paise): string {
+  const neg = paise < 0n;
+  const abs = neg ? -paise : paise;
+  const frac = (abs % 100n).toString().padStart(2, '0').replace(/0+$/, '');
+  return `${neg ? '-' : ''}${abs / 100n}${frac ? `.${frac}` : ''}`;
+}

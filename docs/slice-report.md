@@ -1,4 +1,4 @@
-# Slice report — Slices 1 & 2 (§65)
+# Slice report — Slices 1, 2 & 3 (§65)
 
 ## 1. Files inspected
 
@@ -25,22 +25,37 @@
 | `20261106000300_leads.sql` | Enums, `state_transitions` (seeded from domain), safe JSON readers, sites (PostGIS), leads, append-only activities and duplicate decisions, duplicate finder (pg_trgm + PostGIS), lead score, lead RPCs, RLS |
 | `20261106000400_surveys_evidence.sql` | Surveys (no-double-booking exclusion constraint), immutable submitted revisions, measurements (server-normalized), immutable evidence with supersession, private `evidence` bucket + storage policies, Gate 1 function, survey RPCs, RLS |
 | `20261106000500_directory.sql` | `list_assignable_users` (id + name only) |
+| `20261106000600_locale.sql` | Marathi default for new profiles; `set_my_locale` (audited) |
+| `20261106000700_technical_quotation.sql` | **Slice 3.** Transitions for technical review, document revision and quotation (seeded from the domain); launch rules (configuration catalogue, tax codes, discount policy, validity); `technical_reviews` (bound to the exact submitted survey revision, decisions immutable); `configuration_revisions` (catalogue-checked, checksum, frozen when approved, one draft / one approved per lead); `technical_documents` + `document_revisions` in a private `technical-documents` bucket (approval names the file checksum; new upload never replaces the approved revision); `quotations`, `quotation_revisions`, `quotation_lines` (server-computed paise, mirror of `computeQuotation`), append-only `quotation_negotiations` and `customer_acceptances`, `approval_requests` (O04); RPCs and RLS (prices/costs only for the lead's sales owner and Owner) |
 
 ## 4. Screens / routes completed
 
-Web: `/login`, `/auth/callback`, `/auth/signout`, `/setup-required`, `/` (role-aware KPIs with stated basis and reconciling drill-downs), `/leads` (SE03 list/search/pagination), `/leads/new` (SE02 + SE03 duplicate review), `/leads/[id]` (SE04/SE05/SE06/SE07/SE14 + survey booking SE08, assignment/reopen), `/surveys`, `/surveys/[id]` (TE02 read + revision request, GPS exception review, reschedule/cancel), `/admin/users` (O10), `/audit` (O12), `/notifications`. Each has loading, empty, error, permission-denied and pending/suspended states.
+Web: `/login`, `/auth/callback`, `/auth/signout`, `/setup-required`, `/` (role-aware KPIs with stated basis and reconciling drill-downs), `/leads` (SE03 list/search/pagination), `/leads/new` (SE02 + SE03 duplicate review), `/leads/[id]` (SE04/SE05/SE06/SE07/SE14 + survey booking SE08, assignment/reopen), `/surveys`, `/surveys/[id]` (TE02 read + revision request, GPS exception review, reschedule/cancel), `/admin/users` (O10), `/audit` (O12), `/notifications`. **Slice 3:** `/technical` (TE01 queue: waiting surveys oldest first, open reviews, feasible-without-configuration, documents in review), `/technical/reviews/[id]` (TE02 side-by-side survey values + decision / clarification, TE03 configuration builder with live catalogue check and approval, TE04 document upload with server-side SHA-256, submit, checksum-bound approve / reject), lead detail technical + quotation cards, `/quotations` and `/quotations/[id]` (SE08 draft editor with live preview from the shared engine, submit, SE09 issue + customer response bound to the content hash, revisions, SE10 negotiation log), `/approvals` (O04: requester, reasons, policy threshold, impact; approve / reject / more information; own requests blocked). Home KPIs for open reviews, pending approvals and issued quotations. Each has loading, empty, error, permission-denied and pending/suspended states.
 
 Mobile (Android): Login (OTP), SV01 My surveys (offline cache, online/sync chips, pull to refresh), SV02–SV10 in one survey workspace (accept, check-in with honest GPS exception, building / shaft / machine room / electrical / logistics sections, measurements with explicit unit selector, camera evidence per category, documents or unavailability reason, review with Gate 1 preview and plausibility warnings, submit), SV11 revisit / inaccessible / start revision, WT09-style Sync queue with per-record status and conflict discard.
 
 ## 5. APIs / server actions completed
 
-See `docs/api-contracts.md` — 10 identity/admin RPCs, 8 lead RPCs, 10 survey/evidence RPCs, 1 directory RPC.
+See `docs/api-contracts.md` — 10 identity/admin RPCs, 8 lead RPCs, 10 survey/evidence RPCs, 1 directory RPC, 1 locale RPC, and 16 Slice 3 RPCs (technical review 3, configuration 2, documents 3, quotations 7, approvals 1).
 
 ## 6. RLS / permission rules implemented
 
 RLS enabled on every table; clients hold SELECT only. Scope rules: tenant isolation for partner people data, lead visibility (owner or `lead.read_all`), survey visibility (assigned surveyor, `survey.read_all`, the lead's owner), sales history hidden from field and technical roles, audit to `audit.read`, private evidence storage bound to survey scope with upload only by the assigned surveyor during capture and no update/delete. Segregation of duties listed in `docs/permission-matrix.md`.
 
-## 7. Tests run and actual results (2026-11-06, this environment)
+## 7. Tests run and actual results
+
+**Slice 3 run (2026-11-07, this environment):**
+
+| Suite | Result |
+|---|---|
+| Domain unit tests (`npm test`) | **457 passed** (incl. configuration catalogue, document and quotation machines, input helpers, Marathi dictionary coverage of every new state / enum / parameter) |
+| Database integration (`npm run test:db`) | **57 passed**: 17 new Slice 3 tests + parity (enums, transitions, seeded rules, configuration check on edge cases, 40 random quotations identical in SQL and in the domain engine) |
+| Typecheck all workspaces, web unit tests, `check:i18n` | passed (1,381 dictionary keys, no hard-coded English) |
+| Browser E2E (production build) | **36/36 in Marathi** (with the visible-English scan) and **36/36 in English**: 11 new Slice 3 steps from technical queue to recorded customer acceptance, plus "technical reviewer cannot open prices" |
+
+One E2E run showed a React hydration warning (#418) on the technical queue; it did not recur in four later runs or in isolated repetitions with and without queue items. Recorded as an open observation.
+
+**Slices 1–2 run (2026-11-06):**
 
 | Suite | Command | Result |
 |---|---|---|
@@ -72,7 +87,9 @@ Not run here: web flows against a hosted Supabase project (the E2E gateway stand
 
 ## 8. Known limitations and unresolved decisions
 
-- Slices 3–6 exist as tested domain rules only; no tables, RPCs or screens yet. Feasibility decisions, configuration, quotations, orders, projects, payments, procurement, partner compliance, tasks, QA, handover and warranty are **not usable** in the product yet.
+- Slices 4–6 exist as tested domain rules only. Orders, projects, payments, procurement, partner compliance, tasks, QA, handover and warranty are **not usable** in the product yet.
+- Slice 3 scope notes: structured BOM lines (TE05) and technical change requests (TE06) are deferred to Slice 4, where procurement consumes them (a BOM can be controlled today as a checksum-approved document); customer self-service acceptance (CU04) waits for the customer portal — Sales records acceptance with acceptor, authority, channel and evidence, bound to the issued content hash (D-023); quotation expiry is enforced at issue / acceptance (no background job yet); a PDF rendering of the customer quotation is not generated.
+- Discount limit 5%, margin floor 15%, GST 18% and 30-day validity are launch placeholders pending Owner / Finance confirmation (D-004, D-005, D-011, D-022).
 - No external messaging (WhatsApp/SMS/email), payments, e-sign, push notifications or accounting export; notifications are in-app records.
 - Duplicate *merge execution* is not implemented (requests are recorded and routed).
 - Evidence SHA-256 is computed on the device and recorded; server-side re-hashing / malware scanning is not implemented.
@@ -84,4 +101,4 @@ Not run here: web flows against a hosted Supabase project (the E2E gateway stand
 
 ## 9. Next recommended slice
 
-**Slice 3 — Technical and quotation**: `technical_reviews` (start/clarify/decide, rationale, constraints), versioned `configuration_revisions` and drawing/BOM documents with checksum-bound approval, quotation revisions and lines using `computeQuotation` + `evaluateDiscountAuthority` with rules for D-004/D-005, Owner approval center with self-approval prevention, customer acceptance bound to an exact revision, and the Technical/Sales/Owner screens TE01–TE05, SE09–SE11, O04 — each with RLS, audit and DB tests in the same style.
+**Slice 4 — Order to procurement**: order conversion from an accepted quotation revision (Gate 4, `order.convert`, contract record), project creation and handover checklist (SE11), payment milestone schedule from a configurable template with Finance verification (Gate 5), structured BOM lines mapped to the approved configuration (TE05) and technical change requests (TE06), purchase requests, supplier POs with approval and GRN — each with RLS, audit, DB tests, Marathi + English screens and E2E steps in the same style.

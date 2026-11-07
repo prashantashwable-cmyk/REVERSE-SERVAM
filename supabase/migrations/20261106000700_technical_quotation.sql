@@ -1845,7 +1845,7 @@ begin
   end if;
   perform app.require_lead_owner(v_lead, 'quotation.create');
   if v_at is null then v_missing := v_missing || 'occurred_at'::text; end if;
-  if length(btrim(coalesce(v_payload ->> 'contact', ''))) < 2 then v_missing := v_missing || 'contact'::text; end if;
+  if length(btrim(coalesce(v_payload ->> 'contact', ''))) < 2 then v_missing := v_missing || 'negotiation_contact'::text; end if;
   if length(btrim(coalesce(v_payload ->> 'topic', ''))) < 2 then v_missing := v_missing || 'topic'::text; end if;
   if cardinality(v_missing) > 0 then
     perform app.raise_error('REQUIRED_FIELD_MISSING', jsonb_build_object('fields', to_jsonb(v_missing)));

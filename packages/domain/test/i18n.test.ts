@@ -8,6 +8,17 @@ import {
   LEAD_STATES,
   LOST_REASONS,
   PERMISSION_CODES,
+  DEFAULT_CONFIGURATION_CATALOGUE,
+  DOCUMENT_KINDS,
+  DOCUMENT_REVISION_STATES,
+  LIFT_CATEGORIES,
+  QUOTATION_LINE_CATEGORIES,
+  QUOTATION_STATES,
+  QUOTATION_TERM_KEYS,
+  TECHNICAL_REVIEW_STATES,
+  documentRevisionMachine,
+  quotationMachine,
+  technicalReviewMachine,
   PLAUSIBLE_RANGES_MM,
   ROLE_CODES,
   SURVEY_STATES,
@@ -73,7 +84,17 @@ describe('every value the interface renders has a label in both languages', () =
     ...DEFAULT_SURVEY_REQUIREMENTS.required_fields.map((f) => `field.${f}`),
     ...DEFAULT_SURVEY_REQUIREMENTS.required_measurements.map((m) => `measure.${m}`),
     ...Object.keys(PLAUSIBLE_RANGES_MM).map((m) => `measure.${m}`),
-    ...[...leadMachine.transitions, ...surveyMachine.transitions].map((tr) => `action.${tr.action}`),
+    ...[...leadMachine.transitions, ...surveyMachine.transitions, ...technicalReviewMachine.transitions, ...documentRevisionMachine.transitions, ...quotationMachine.transitions].map((tr) => `action.${tr.action}`),
+    ...TECHNICAL_REVIEW_STATES.map((s) => `technical.state.${s}`),
+    ...DOCUMENT_REVISION_STATES.map((s) => `technical.document_state.${s}`),
+    ...QUOTATION_STATES.map((s) => `quotation.state.${s}`),
+    ...DOCUMENT_KINDS.map((k) => `enum.document_kind.${k}`),
+    ...LIFT_CATEGORIES.map((c) => `enum.lift_category.${c}`),
+    ...QUOTATION_LINE_CATEGORIES.map((c) => `enum.line_category.${c}`),
+    ...QUOTATION_TERM_KEYS.map((k) => `field.terms.${k}`),
+    ...DEFAULT_CONFIGURATION_CATALOGUE.parameters.map((p) => `field.config.${p.key}`),
+    ...DEFAULT_CONFIGURATION_CATALOGUE.parameters.flatMap((p) => (p.choices ?? []).map((c) => `enum.config.${c}`)),
+    ...['discount_above_authority', 'margin_below_floor', 'no_cost_basis'].map((r) => `enum.approval_reason.${r}`),
     ...['verified', 'low_accuracy', 'permission_denied', 'unavailable'].map((g) => `enum.gps.${g}`),
   ];
   it.each(required)('%s', (key) => {
@@ -87,6 +108,10 @@ describe('every value the interface renders has a label in both languages', () =
     expect(fieldLabel('measurement.pit_depth', 'en')).toBe('Pit depth');
     expect(fieldLabel('doc_shaft_layout', 'en')).toBe('Document: shaft layout');
     expect(fieldLabel('assign', 'mr')).toBe('नेमून द्या');
+    expect(fieldLabel('config.persons', 'en')).toBe('Persons');
+    expect(fieldLabel('terms.exclusions', 'mr')).toBe('समाविष्ट नसलेल्या बाबी');
+    expect(fieldLabel('lines.2.rate_paise', 'en')).toBe('Line 2: Rate');
+    expect(fieldLabel('lines.3', 'mr')).toBe('ओळ 3');
   });
 
   it('Gate 1 failures and warnings carry translatable message keys', () => {

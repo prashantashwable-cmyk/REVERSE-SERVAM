@@ -58,6 +58,25 @@ const STATE_TONES: Record<string, Tone> = {
   active: 'ok',
   pending_verification: 'warn',
   suspended: 'crit',
+  // Technical review / documents / quotations (Slice 3)
+  open: 'info',
+  in_review: 'gold',
+  clarification_requested: 'warn',
+  insufficient_information: 'warn',
+  feasible: 'ok',
+  conditionally_feasible: 'warn',
+  not_feasible: 'crit',
+  draft: 'neutral',
+  approved: 'ok',
+  rejected: 'crit',
+  superseded: 'neutral',
+  pending_approval: 'warn',
+  issued: 'gold',
+  rejected_by_customer: 'neutral',
+  expired: 'neutral',
+  pending: 'warn',
+  more_info: 'warn',
+  withdrawn: 'neutral',
 };
 
 export function StateBadge({ state, labelText }: { state: string; labelText: string }) {

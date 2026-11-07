@@ -15,6 +15,9 @@ export async function generateMetadata() {
 const LINK: Record<string, (id: string) => string> = {
   lead: (id) => `/leads/${id}`,
   survey: (id) => `/surveys/${id}`,
+  quotation: (id) => `/quotations/${id}`,
+  approval_request: () => '/approvals',
+  technical_document: () => '/technical',
 };
 
 
@@ -37,7 +40,7 @@ export default async function NotificationsPage() {
           <ul className="text-sm">
             {data.map((n) => {
               const href = n.entity_type && n.entity_id && LINK[n.entity_type] ? LINK[n.entity_type]!(n.entity_id) : null;
-              const ref = (n.payload as Record<string, string>)?.lead_number ?? (n.payload as Record<string, string>)?.survey_number;
+              const ref = (n.payload as Record<string, string>)?.lead_number ?? (n.payload as Record<string, string>)?.survey_number ?? (n.payload as Record<string, string>)?.quotation_number ?? (n.payload as Record<string, string>)?.document_number;
               return (
                 <li key={n.id} className={`flex flex-wrap items-center justify-between gap-2 border-t border-silver-200 py-2 first:border-0 ${n.read_at ? 'text-silver-700' : ''}`}>
                   <span>

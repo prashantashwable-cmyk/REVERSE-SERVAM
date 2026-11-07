@@ -6,6 +6,8 @@ const nextConfig = {
   // All metadata is static: render it in <head> for every client instead of streaming it
   // through a Suspense outlet (removes a hydration-timing variable seen in E2E runs).
   htmlLimitedBots: /.*/,
+  // Technical documents (TE04) are uploaded through a server action that computes their checksum.
+  experimental: { serverActions: { bodySizeLimit: '26mb' } },
   async headers() {
     return [
       {

@@ -52,6 +52,9 @@ export function errorMessage(code: ErrorCode, locale: Locale = DEFAULT_LOCALE): 
  * server (e.g. "site.city", "measurement.pit_depth", "doc_shaft_layout").
  */
 export function fieldLabel(key: string, locale: Locale = DEFAULT_LOCALE): string {
+  // Row-level errors from list editors, e.g. "lines.2.rate_paise" → "Line 2: Rate".
+  const row = /^lines\.(\d+)(?:\.([a-z_]+))?$/.exec(key);
+  if (row) return row[2] ? `${t('field.line_ref', locale, { no: row[1]! })}: ${fieldLabel(row[2], locale)}` : t('field.line_ref', locale, { no: row[1]! });
   const candidates = [
     `field.${key}`,
     key.startsWith('measurement.') ? `measure.${key.slice('measurement.'.length)}` : '',

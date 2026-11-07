@@ -1,13 +1,14 @@
 import { randomUUID } from 'node:crypto';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { allowedActions, fromServerError, leadMachine } from '@aiec/domain';
+import { allowedActions, formatInr, fromServerError, leadMachine } from '@aiec/domain';
 import { Card, EmptyState, KeyValue, PageHeader, StateBadge } from '@/components/ui';
 import { ErrorPanel } from '@/components/ui-client';
 import { getT } from '@/lib/i18n';
 import { can, getContext } from '@/lib/context';
 import { dt, istNowLocal, phone } from '@/lib/format';
 import { supabaseServer } from '@/lib/supabase/server';
+import { CreateQuotationButton } from '../../quotations/quotation-forms';
 import { ActivityForm, AssignForm, CloseLeadForm, QualifyForm, ScheduleSurveyForm } from './lead-forms';
 
 export async function generateMetadata() {
@@ -31,11 +32,29 @@ export default async function LeadDetail({ params, searchParams }: { params: Pro
   if (error) return <ErrorPanel code={fromServerError(error).code} />;
   if (!lead) notFound(); // Not visible under RLS looks identical to non-existent (no existence leak).
 
-  const [{ data: activities }, { data: surveys }, { data: decisions }] = await Promise.all([
+  const [{ data: activities }, { data: surveys }, { data: decisions }, { data: reviews }, { data: configs }, { data: techDocs }, { data: quotation }] = await Promise.all([
     supabase.from('lead_activities').select('id, activity_type, outcome, summary, occurred_at, next_follow_up_at, no_action_reason').eq('lead_id', id).order('occurred_at', { ascending: false }).limit(50),
     supabase.from('surveys').select('id, survey_number, status, scheduled_start, scheduled_end').eq('lead_id', id).order('created_at', { ascending: false }),
     supabase.from('lead_duplicate_decisions').select('id, decision, match_reasons, reason, decided_at').eq('lead_id', id),
+    supabase.from('technical_reviews').select('id, review_number, status, technical_basis, constraints, corrective_actions, decision_reason, decided_at').eq('lead_id', id).order('created_at', { ascending: false }),
+    supabase.from('configuration_revisions').select('id, revision_no, status, lift_category, parameters, approved_at, warnings').eq('lead_id', id).eq('status', 'approved'),
+    supabase.from('technical_documents').select('id, document_number, title, kind, current_approved_revision_id').eq('lead_id', id),
+    supabase.from('quotations').select('id, quotation_number, current_revision_id').eq('lead_id', id).maybeSingle(),
   ]);
+  const approvedConfig = configs?.[0] ?? null;
+  const latestReview = reviews?.[0] ?? null;
+  const { data: quoteRev } = quotation?.current_revision_id
+    ? await supabase.from('quotation_revisions').select('revision_no, status, valid_until, totals').eq('id', quotation.current_revision_id).maybeSingle()
+    : { data: null };
+  const approvedDocIds = (techDocs ?? []).map((x) => x.current_approved_revision_id).filter(Boolean) as string[];
+  const { data: approvedDocs } = approvedDocIds.length
+    ? await supabase.from('document_revisions').select('id, document_id, revision_no, storage_path').in('id', approvedDocIds)
+    : { data: [] as any[] };
+  const docLinks = new Map<string, string>();
+  if (approvedDocs?.length) {
+    const { data: urls } = await supabase.storage.from('technical-documents').createSignedUrls(approvedDocs.map((x: any) => x.storage_path), 300);
+    for (const u of urls ?? []) if (u.path && u.signedUrl) docLinks.set(u.path, u.signedUrl);
+  }
 
   const perms = new Set(ctx.permissions);
   const isOwner = lead.owner_user_id === ctx.user_id;
@@ -123,6 +142,58 @@ export default async function LeadDetail({ params, searchParams }: { params: Pro
           </ul>
         ) : (
           <EmptyState title={t('lead.no_survey')} body={lead.status === 'qualified' ? t('lead.no_survey_book') : t('lead.no_survey_wait')} />
+        )}
+      </Card>
+
+      <Card title={t('lead.technical')} className="mt-4">
+        {latestReview ? (
+          <KeyValue
+            items={[
+              [t('lead.review_status'), `${latestReview.review_number} · ${t(`technical.state.${latestReview.status}`)}`],
+              [t('field.technical_basis'), latestReview.technical_basis ?? '—'],
+              [t('field.constraints'), (latestReview.constraints ?? []).join('; ') || '—'],
+              [t('field.corrective_actions'), (latestReview.corrective_actions ?? []).join('; ') || '—'],
+              [t('lead.configuration'), approvedConfig ? t('lead.configuration_summary', {
+                no: approvedConfig.revision_no,
+                category: t(`enum.lift_category.${approvedConfig.lift_category}`),
+                load: String(approvedConfig.parameters?.rated_load_kg?.value ?? '—'),
+                stops: String(approvedConfig.parameters?.stops?.value ?? '—'),
+              }) : t('lead.no_configuration')],
+            ]}
+          />
+        ) : (
+          <EmptyState title={t('lead.no_technical_review')} body={t('lead.no_technical_review_body')} />
+        )}
+        {approvedDocs && approvedDocs.length > 0 ? (
+          <ul className="mt-3 text-sm">
+            {approvedDocs.map((x: any) => {
+              const doc = (techDocs ?? []).find((dd) => dd.id === x.document_id);
+              return (
+                <li key={x.id}>
+                  {doc?.document_number} · {doc?.title} · {t('technical.revision_no', { no: x.revision_no })}{' '}
+                  {docLinks.get(x.storage_path) ? <a className="underline" href={docLinks.get(x.storage_path)} target="_blank" rel="noreferrer">{t('survey.open_file')}</a> : null}
+                </li>
+              );
+            })}
+          </ul>
+        ) : null}
+      </Card>
+
+      <Card title={t('lead.quotation')} className="mt-4">
+        {quotation ? (
+          <p className="text-sm">
+            <Link prefetch={false} href={`/quotations/${quotation.id}`} className="font-mono font-semibold underline">{quotation.quotation_number}</Link>{' '}
+            {quoteRev ? (
+              <>
+                · {t('quotation.revision_short', { no: quoteRev.revision_no })} · <StateBadge state={quoteRev.status} labelText={t(`quotation.state.${quoteRev.status}`)} />
+                {quoteRev.totals?.grandTotalPaise ? ` · ${formatInr(BigInt(quoteRev.totals.grandTotalPaise))}` : ''}
+              </>
+            ) : null}
+          </p>
+        ) : isOwner && lead.status === 'qualified' && can(ctx, 'quotation.create') && approvedConfig ? (
+          <CreateQuotationButton leadId={id} operationId={randomUUID()} />
+        ) : (
+          <EmptyState title={t('lead.no_quotation')} body={approvedConfig ? t('lead.quotation_owner_only') : t('lead.quotation_needs_configuration')} />
         )}
       </Card>
 

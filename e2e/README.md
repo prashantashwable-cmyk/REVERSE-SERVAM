@@ -34,6 +34,8 @@ npm run build:demo && (cd docs && python3 -m http.server 8765 &) && node e2e/dem
 
 Refresh the database (step 1) before each run: the scenario creates leads whose names would otherwise be (correctly) flagged as duplicates on the next run.
 
-## What it covers (25 checks)
+## What it covers (36 checks)
 
 Sales: home KPIs, lead list, validation errors, lead creation, duplicate review (values kept), activity → contacted, qualification with score, survey booking, survey detail. Owner: KPIs with stated basis, audit log, users & roles, read-only lead view. Technical manager: review queue, measurements + evidence, return for revision, no access to sales leads. Partner admin: no lead access, sees only own team. Pending account banner. 390 px mobile width without horizontal overflow.
+
+Slice 3 (11 checks): a fresh survey is seeded through the real RPCs; Technical starts the review from the queue, records a feasible decision, builds and approves the configuration, uploads a shaft layout (server-side checksum), submits and approves it; Sales sees the technical summary, creates a quotation with a 12% discount, which goes to the Owner; the Owner approves in the approval center; Sales issues and records acceptance bound to the content hash; the technical reviewer cannot open the quotation.
