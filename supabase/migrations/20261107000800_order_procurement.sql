@@ -182,6 +182,9 @@ create table public.projects (
   lead_id uuid not null references public.leads (id),
   site_id uuid not null references public.sites (id),
   configuration_revision_id uuid not null references public.configuration_revisions (id),
+  -- Display snapshot: operations, procurement and finance never read the sales lead.
+  title text not null,
+  site_label text not null,
   status public.project_state not null default 'created',
   handover_acknowledged_by uuid references public.user_profiles (id),
   handover_acknowledged_at timestamptz,
@@ -565,7 +568,7 @@ language sql
 stable
 set search_path = ''
 as $$
-  select jsonb_build_object('project_id', p.id, 'project_number', p.project_number, 'status', p.status, 'order_id', p.order_id, 'version', p.version)
+  select jsonb_build_object('project_id', p.id, 'project_number', p.project_number, 'title', p.title, 'status', p.status, 'order_id', p.order_id, 'version', p.version)
 $$;
 
 create function public.convert_quotation_to_order(p_operation_id uuid, p_revision_id uuid, p_payload jsonb)
@@ -648,8 +651,10 @@ begin
   perform app.audit(v_lead.organization_id, 'lead', v_lead.id, v_lt.audit_event, jsonb_build_object('status', v_lead.status),
     jsonb_build_object('status', 'won', 'order_id', v_order.id), null, v_lt.permission_code);
 
-  insert into public.projects (project_number, organization_id, order_id, lead_id, site_id, configuration_revision_id, created_by, updated_by)
-  values (app.next_business_id('AIEC', v_city), v_lead.organization_id, v_order.id, v_lead.id, v_lead.site_id, v_r.configuration_revision_id, v_uid, v_uid)
+  insert into public.projects (project_number, organization_id, order_id, lead_id, site_id, configuration_revision_id, title, site_label, created_by, updated_by)
+  values (app.next_business_id('AIEC', v_city), v_lead.organization_id, v_order.id, v_lead.id, v_lead.site_id, v_r.configuration_revision_id,
+    v_lead.project_name, (select concat_ws(', ', nullif(s.address_line, ''), nullif(s.locality, ''), s.city) from public.sites s where s.id = v_lead.site_id),
+    v_uid, v_uid)
   returning * into v_project;
   v_amounts := app.allocate(v_order.contract_value_paise, (select array_agg((i ->> 'shareBps')::integer order by o) from jsonb_array_elements(v_template -> 'items') with ordinality x(i, o)));
   insert into public.payment_milestones (project_id, sequence, code, share_bps, amount_paise, trigger_event, due_days, gates)
@@ -1534,7 +1539,8 @@ create policy approval_requests_read on public.approval_requests for select to a
 
 -- Procurement and operations see supplier organizations (to quote and order).
 create policy organizations_read_suppliers on public.organizations for select to authenticated using (
-  kind = 'supplier' and (app.is_procurement(app.aiec_org_id()) or app.has_permission('project.read_all', app.aiec_org_id())));
+  kind = 'supplier' and (app.is_procurement(app.aiec_org_id()) or app.has_permission('project.read_all', app.aiec_org_id())
+    or app.has_permission('finance.ledger.read', app.aiec_org_id())));
 
 revoke all on public.orders, public.projects, public.payment_milestones, public.payment_claims, public.bom_revisions, public.bom_lines,
   public.purchase_requests, public.purchase_request_lines, public.supplier_quotes, public.purchase_orders, public.purchase_order_lines,

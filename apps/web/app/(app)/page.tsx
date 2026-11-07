@@ -63,11 +63,23 @@ export default async function Home() {
   if (can(ctx, 'technical.review')) {
     kpis.push({ key: 'reviews_open', href: '/technical', count: await tableCount('technical_reviews', (q) => q.in('status', ['in_review', 'clarification_requested', 'insufficient_information'])) });
   }
-  if (can(ctx, 'quotation.discount.approve')) {
+  if (can(ctx, 'quotation.discount.approve') || can(ctx, 'procurement.po.approve') || can(ctx, 'approval.exception.decide')) {
     kpis.push({ key: 'approvals_pending', href: '/approvals', count: await tableCount('approval_requests', (q) => q.eq('status', 'pending')) });
   }
   if (can(ctx, 'quotation.create')) {
     kpis.push({ key: 'quotations_issued', href: '/quotations?status=issued', count: await tableCount('quotation_revisions', (q) => q.eq('status', 'issued')) });
+  }
+  if (can(ctx, 'project.plan')) {
+    kpis.push({ key: 'projects_awaiting_planning', href: '/projects?status=created', count: await tableCount('projects', (q) => q.eq('status', 'created')) });
+  }
+  if (can(ctx, 'finance.payment.verify')) {
+    kpis.push({ key: 'claims_to_verify', href: '/finance', count: await tableCount('payment_claims', (q) => q.in('status', ['claimed', 'pending_clarification'])) });
+  }
+  if (can(ctx, 'procurement.po.create')) {
+    kpis.push({ key: 'open_purchase_requests', href: '/procurement', count: await tableCount('purchase_requests', (q) => q.in('status', ['open', 'supplier_selected'])) });
+  }
+  if (can(ctx, 'procurement.grn.record')) {
+    kpis.push({ key: 'pos_awaiting_receipt', href: '/procurement', count: await tableCount('purchase_orders', (q) => q.eq('status', 'issued')) });
   }
   if (can(ctx, 'survey.schedule')) {
     kpis.push({ key: 'reschedule_requests', href: '/surveys?status=reschedule_requested', count: await surveyCount('reschedule_requested') });

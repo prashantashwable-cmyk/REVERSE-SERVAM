@@ -23,6 +23,7 @@ const T = (key, params = {}) => {
 // Words allowed to stay in Latin script on a Marathi page: brand / technical tokens and the
 // data the people typed (names, projects, addresses) collected below.
 const LATIN_OK = new Set(['AIEC', 'OS', 'GPS', 'IST', 'OTP', 'MRL', 'SMS', 'WhatsApp', 'PUN', 'PCMC', 'LD', 'SV', 'mm', 'cm', 'DEMO', 'Supabase', 'ID', 'demo', 'BOM', 'TR', 'QT', 'TD', 'kg', 'PDF', 'CSV', 'Excel', 'MB', 'SHA', 'GST',
+  'PR', 'PO', 'GRN', 'OR', 'PM', 'NEFT', 'RTGS', 'IMPS', 'UPI', 'UTR', // business-number prefixes and payment rails
   'English', // the language switch names each language in its own script
 ]);
 const dataWords = new Set();
@@ -74,7 +75,7 @@ async function seedSubmittedSurvey(db) {
   return { leadId: lead.lead_id, surveyNumber: sv.survey_number, project };
 }
 
-const PHONES = { owner: '9000000000', sales1: '9000000001', surveyor2: '9000000004', tech1: '9000000005', partnerA_admin: '9000000007', pending1: '9000000012' };
+const PHONES = { owner: '9000000000', sales1: '9000000001', surveyor2: '9000000004', tech1: '9000000005', ops1: '9000000006', partnerA_admin: '9000000007', pending1: '9000000012', finance1: '9000000013', procure1: '9000000014' };
 const results = [];
 let shot = 0;
 
@@ -383,6 +384,146 @@ const expectText = (page, text) => async () => {
     await tq.getByText(T('error.NOT_FOUND.title')).first().waitFor({ timeout: 8000 });
     return 'technical reviewer cannot open prices';
   });
+
+  // ---------- Slice 4: order → project → Gate 5 payment → BOM → purchase request → PO → goods receipt ----------
+  const stamp = String(Date.now()).slice(-6);
+  const contractRef = `WO-${stamp}`;
+  const utr = `UTR${stamp}0099`;
+  addData(contractRef, utr, 'Aditya Heights Society', 'Advance by NEFT', 'Accepted; plan the site visit', 'Lift machine and controller', 'Guide rails',
+    'MC', 'GR', 'set', 'pcs', 'Lowest matching price', '30 percent advance, balance on delivery', 'Received in good condition', 'Pune', 'Aundh', 'Demo Supplier Lift Components');
+  const q4 = new Client({ connectionString: process.env.AIEC_E2E_DATABASE_URL ?? 'postgres://postgres@127.0.0.1:54329/aiec_test' });
+  await q4.connect();
+  const isoDay = (n) => new Date(Date.now() + 330 * 60000 + n * 864e5).toISOString().slice(0, 10);
+
+  await sq.goto(quoteUrl);
+  await snap(sq, 's4-sales-convert-to-order', expectText(sq, T('order.checklist_title')));
+  await sq.fill('#contract_reference', contractRef);
+  for (const box of await sq.locator('input[type="checkbox"][name^="check_"]').all()) await box.check();
+  await sq.click(`button:has-text("${T('order.convert')}")`);
+  await sq.waitForURL(/\/projects\/[0-9a-f-]{36}$/, { waitUntil: 'commit', timeout: 20000 }); await sq.waitForLoadState('networkidle');
+  const projectUrl = sq.url();
+  const projectId = projectUrl.split('/').pop();
+  await snap(sq, 's4-sales-project-created', expectText(sq, T('project.handover_waiting')));
+  const advance = (await q4.query(`select amount_paise::text as a from payment_milestones where project_id = $1 and code = 'advance'`, [projectId])).rows[0].a;
+  const advanceRupees = `${advance.slice(0, -2)}.${advance.slice(-2)}`;
+
+  const op = await login(browser, 'ops1');
+  await snap(op, 's4-ops-home-kpi', expectText(op, T('kpi.projects_awaiting_planning.label')));
+  await op.goto(projectUrl);
+  await op.fill('#handover_notes', 'Accepted; plan the site visit');
+  await op.click(`button:has-text("${T('project.acknowledge')}")`);
+  await op.getByRole('button', { name: T('project.acknowledge') }).waitFor({ state: 'detached', timeout: 15000 });
+  await op.reload();
+  await snap(op, 's4-ops-handover-accepted-gate-blocked', async () => {
+    await op.getByText(T('project.state.planning')).first().waitFor({ timeout: 8000 });
+    await op.getByText(T('gate5.blocked')).first().waitFor({ timeout: 8000 });
+    return 'planning; procurement blocked until the advance is verified';
+  });
+
+  await sq.goto(projectUrl);
+  await sq.selectOption('#milestone_code', 'advance');
+  await sq.fill('#payer_name', 'Aditya Heights Society');
+  await sq.fill('#claim_amount', advanceRupees);
+  await sq.fill('#payment_reference', utr);
+  await sq.fill('#evidence_note', 'Advance by NEFT');
+  await sq.click(`button:has-text("${T('payment.record_claim')}")`);
+  await sq.getByText(T('payment.state.claimed')).first().waitFor({ timeout: 15000 });
+  await sq.reload();
+  await snap(sq, 's4-sales-advance-claim-recorded', expectText(sq, T('payment.state.claimed')));
+
+  const fp = await login(browser, 'finance1');
+  await fp.goto(`${BASE}/finance`);
+  await snap(fp, 's4-finance-claims-to-verify', expectText(fp, utr));
+  const claimCard = fp.locator('section', { hasText: utr });
+  await claimCard.locator('input[name="matched_statement_reference"]').fill(`HDFC statement line ${utr}`);
+  addData(`HDFC statement line ${utr}`);
+  await claimCard.getByRole('button', { name: T('payment.record_decision') }).click();
+  await claimCard.waitFor({ state: 'detached', timeout: 15000 });
+  await fp.reload();
+  await snap(fp, 's4-finance-advance-verified', expectText(fp, T('payment.state.verified')));
+
+  await tq.goto(projectUrl);
+  await tq.fill('#bi_0', 'MC-01'); await tq.fill('#bd_0', 'Lift machine and controller'); await tq.fill('#bq_0', '1'); await tq.fill('#bu_0', 'set');
+  await tq.click(`button:has-text("${T('quotation.add_line')}")`);
+  await tq.fill('#bi_1', 'GR-02'); await tq.fill('#bd_1', 'Guide rails'); await tq.fill('#bq_1', '2'); await tq.fill('#bu_1', 'pcs');
+  await tq.click(`button:has-text("${T('bom.save')}")`);
+  await tq.getByRole('button', { name: T('bom.approve') }).waitFor({ timeout: 15000 });
+  await tq.click(`button:has-text("${T('bom.approve')}")`);
+  await tq.getByRole('button', { name: T('bom.approve') }).waitFor({ state: 'detached', timeout: 15000 });
+  await tq.reload();
+  await snap(tq, 's4-tech-bom-approved', expectText(tq, T('bom.state.approved')));
+
+  const pp = await login(browser, 'procure1');
+  await pp.goto(projectUrl);
+  await snap(pp, 's4-procurement-project-gate-open', async () => {
+    await pp.getByRole('button', { name: T('procurement.create_request') }).waitFor({ timeout: 8000 });
+    if (await pp.getByText(T('order.contract_value')).count()) throw new Error('procurement must not see customer money');
+    return 'gate open; customer contract value hidden from procurement';
+  });
+  for (const input of await pp.locator('input[name^="qty_"]').all()) await input.fill(await input.getAttribute('placeholder'));
+  await pp.fill('#required_by', isoDay(20));
+  await pp.click(`button:has-text("${T('procurement.create_request')}")`);
+  await pp.waitForURL(/\/procurement\/requests\//, { waitUntil: 'commit', timeout: 20000 }); await pp.waitForLoadState('networkidle');
+  await pp.fill('#q_net', '400000'); await pp.fill('#q_tax', '72000'); await pp.fill('#q_freight', '5000');
+  await pp.fill('#q_lead', '30'); await pp.fill('#q_warranty', '12'); await pp.fill('#q_terms', '30 percent advance, balance on delivery');
+  await pp.click(`button:has-text("${T('procurement.add_quote')}")`);
+  await pp.getByRole('button', { name: T('procurement.select_supplier') }).waitFor({ timeout: 15000 });
+  await pp.fill('#rationale', 'Lowest matching price');
+  await pp.click(`button:has-text("${T('procurement.select_supplier')}")`);
+  await pp.getByRole('button', { name: T('procurement.create_po') }).waitFor({ timeout: 15000 });
+  await pp.reload();
+  await snap(pp, 's4-procurement-quotes-compared-supplier-selected', expectText(pp, T('procurement.selected')));
+  const rates = ['450000', '20000'];
+  let ri = 0;
+  for (const input of await pp.locator('input[name^="rate_"]').all()) await input.fill(rates[ri++] ?? '1000');
+  await pp.fill('#delivery_from', isoDay(25)); await pp.fill('#delivery_to', isoDay(35));
+  await pp.fill('#po_payment_terms', '30 percent advance, balance on delivery');
+  await pp.click(`button:has-text("${T('procurement.create_po')}")`);
+  await pp.waitForURL(/\/procurement\/orders\//, { waitUntil: 'commit', timeout: 20000 }); await pp.waitForLoadState('networkidle');
+  const poUrl = pp.url();
+  await snap(pp, 's4-procurement-po-draft-above-limit', expectText(pp, T('procurement.submit_needs_approval')));
+  await pp.click(`button:has-text("${T('procurement.submit_po')}")`);
+  await pp.getByText(T('procurement.waiting_approval')).waitFor({ timeout: 15000 });
+
+  await op.goto(`${BASE}/approvals`);
+  await snap(op, 's4-ops-po-approval-card', expectText(op, T('enum.approval_reason.po_above_limit')));
+  const poCard = op.locator('section', { hasText: T('approvals.open_po') }).filter({ has: op.locator(`a[href="${poUrl.replace(BASE, '')}"]`) });
+  await poCard.getByRole('button', { name: T('approvals.approve') }).click();
+  await poCard.waitFor({ state: 'detached', timeout: 15000 });
+
+  await pp.goto(poUrl);
+  await pp.click(`button:has-text("${T('procurement.issue_po')}")`);
+  await pp.getByRole('button', { name: T('procurement.issue_po') }).waitFor({ state: 'detached', timeout: 15000 });
+  for (const label of ['confirm', 'mark_ready', 'dispatch', 'mark_delivered'].map((a) => T(`action.material.${a}`))) {
+    for (let n = await pp.getByRole('button', { name: label, exact: true }).count(); n > 0; n--) {
+      await pp.getByRole('button', { name: label, exact: true }).first().click();
+      await pp.waitForFunction(([l, c]) => [...document.querySelectorAll('button')].filter((b) => b.textContent === l).length < c, [label, n], { timeout: 15000 });
+    }
+  }
+  await pp.reload();
+  await snap(pp, 's4-procurement-lines-delivered', expectText(pp, T('procurement.grn_title')));
+  // First receipt: line 1 in full, line 2 only one of two (a partial receipt never completes a line).
+  for (const input of await pp.locator('input[name^="received_"]').all()) await input.fill('1');
+  await pp.click(`button:has-text("${T('procurement.record_grn')}")`);
+  await pp.getByText(T('material.state.received')).first().waitFor({ timeout: 15000 });
+  await pp.reload();
+  await snap(pp, 's4-procurement-partial-receipt', async () => {
+    await pp.getByText(T('material.state.received')).first().waitFor({ timeout: 8000 });
+    await pp.getByText(T('procurement.po_state.issued')).first().waitFor({ timeout: 8000 });
+    return 'line 2 partly received; PO stays issued';
+  });
+  for (const input of await pp.locator('input[name^="received_"]').all()) await input.fill('1');
+  for (const input of await pp.locator('input[name^="remarks_"]').all()) await input.fill('Received in good condition');
+  await pp.click(`button:has-text("${T('procurement.record_grn')}")`);
+  await pp.getByText(T('procurement.po_state_note.closed')).waitFor({ timeout: 15000 });
+  await pp.reload();
+  await snap(pp, 's4-procurement-po-closed', expectText(pp, T('procurement.po_state.closed')));
+  await snap(sq, 's4-sales-cannot-see-purchasing', async () => {
+    await sq.goto(poUrl);
+    await sq.getByText(T('error.NOT_FOUND.title')).first().waitFor({ timeout: 8000 });
+    return 'sales cannot open supplier prices';
+  });
+  await q4.end();
 
   // ---------- Mobile viewport (sales) ----------
   const m = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });

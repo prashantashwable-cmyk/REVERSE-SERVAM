@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { QUOTATION_TERM_KEYS, formatBps, formatInr, formatQuantityMilli, fromServerError, paiseToInput } from '@aiec/domain';
@@ -9,6 +10,7 @@ import { getT } from '@/lib/i18n';
 import { supabaseServer } from '@/lib/supabase/server';
 import { IssueQuotationButton, NegotiationForm, QuotationEditor, ResponseForm, ReviseForm, SubmitQuotationButton } from '../quotation-forms';
 import type { LineDraft } from '../quotation-types';
+import { ConvertOrderForm } from '../../projects/project-forms';
 
 export async function generateMetadata() {
   const { t } = await getT();
@@ -37,17 +39,21 @@ export default async function QuotationPage({ params, searchParams }: { params: 
     supabase.from('leads').select('id, lead_number, project_name, contact_name, owner_user_id, status').eq('id', q.lead_id).maybeSingle(),
     supabase.from('quotation_revisions').select('*').eq('quotation_id', id).order('revision_no', { ascending: false }),
     supabase.from('quotation_negotiations').select('*').eq('quotation_id', id).order('occurred_at', { ascending: false }),
-    supabase.from('approval_requests').select('id, entity_id, status, reasons, decision_reason, decided_at, requested_at').eq('lead_id', q.lead_id).order('requested_at', { ascending: false }),
+    supabase.from('approval_requests').select('id, entity_id, status, reasons, decision_reason, decided_at, requested_at').eq('lead_id', q.lead_id).eq('kind', 'quotation_discount').order('requested_at', { ascending: false }),
     supabase.from('business_rules').select('value, version').eq('rule_key', 'commercial.tax_codes').order('version', { ascending: false }).limit(1),
   ]);
   const current = (revisions ?? []).find((r: any) => r.id === q.current_revision_id);
   const shown = (revisions ?? []).find((r: any) => r.id === rev) ?? current;
   if (!shown) notFound();
-  const [{ data: lines }, { data: acceptance }, { data: config }] = await Promise.all([
+  const [{ data: lines }, { data: acceptance }, { data: config }, { data: order }, { data: templateRule }] = await Promise.all([
     supabase.from('quotation_lines').select('*').eq('revision_id', shown.id).order('line_no'),
     supabase.from('customer_acceptances').select('*').eq('revision_id', shown.id).maybeSingle(),
     supabase.from('configuration_revisions').select('revision_no, status, lift_category, checksum').eq('id', shown.configuration_revision_id).maybeSingle(),
+    supabase.from('orders').select('id, order_number').eq('lead_id', q.lead_id).maybeSingle(),
+    supabase.from('business_rules').select('value, version').eq('rule_key', 'payment.milestone_templates').order('version', { ascending: false }).limit(1),
   ]);
+  const { data: project } = order ? await supabase.from('projects').select('id, project_number').eq('order_id', order.id).maybeSingle() : { data: null };
+  const templates = ((templateRule?.[0]?.value as { templates?: { code: string }[] })?.templates ?? []).map((x) => x.code);
 
   const isOwner = lead?.owner_user_id === ctx.user_id;
   const isCurrent = shown.id === q.current_revision_id;
@@ -185,7 +191,18 @@ export default async function QuotationPage({ params, searchParams }: { params: 
               [t('quotation.content_hash'), <span key="h" className="font-mono text-xs">{acceptance.content_sha256}</span>],
             ]}
           />
-          <p className="mt-2 text-xs text-silver-700">{t('quotation.next_slice_order')}</p>
+        </Card>
+      ) : null}
+
+      {order ? (
+        <p role="status" className="mt-4 rounded-md bg-ok-50 px-3 py-2 text-sm text-ok-700">
+          {t('order.exists', { order: order.order_number })}{' '}
+          {project ? <Link prefetch={false} href={`/projects/${project.id}`} className="underline">{t('order.open_project', { project: project.project_number })}</Link> : null}
+        </p>
+      ) : isCurrent && isOwner && shown.status === 'accepted' && can(ctx, 'order.convert') ? (
+        <Card title={t('order.convert_title')} className="mt-4">
+          <p className="mb-3 text-sm text-silver-700">{t('order.convert_intro')}</p>
+          <ConvertOrderForm revisionId={shown.id} operationId={randomUUID()} templates={templates} today={today} />
         </Card>
       ) : null}
 

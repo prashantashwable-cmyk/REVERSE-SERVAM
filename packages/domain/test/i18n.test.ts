@@ -32,6 +32,25 @@ import {
   t,
   translator,
   validateSurveySubmission,
+  BOM_STATES,
+  DEFAULT_MILESTONE_TEMPLATES,
+  GATED_ACTIONS,
+  INSPECTION_RESULTS,
+  MATERIAL_STATES,
+  ORDER_HANDOVER_ITEMS,
+  ORDER_STATES,
+  PAYMENT_MODES,
+  PAYMENT_STATES,
+  PROJECT_STATES,
+  PURCHASE_ORDER_STATES,
+  PURCHASE_REQUEST_STATES,
+  bomMachine,
+  materialLineMachine,
+  orderMachine,
+  paymentMachine,
+  projectMachine,
+  purchaseOrderMachine,
+  purchaseRequestMachine,
 } from '../src';
 import { en } from '../src/messages/en';
 import { mr } from '../src/messages/mr';
@@ -39,7 +58,7 @@ import { mr } from '../src/messages/mr';
 const DEVANAGARI = /[ऀ-ॿ]/;
 const params = (s: string) => [...s.matchAll(/\{(\w+)\}/g)].map((m) => m[1]).sort();
 /** Values that are legitimately identical in both languages (brand, units, product names, technical examples). */
-const SAME_IN_BOTH = /^(AIEC|GPS|SMS|WhatsApp|mm|lead, survey…|\{name\} \(\{kind\}\)|GPS ±\{metres\} m)$/;
+const SAME_IN_BOTH = /^(AIEC|GPS|SMS|WhatsApp|mm|NEFT|RTGS|IMPS|UPI|lead, survey…|\{name\} \(\{kind\}\)|GPS ±\{metres\} m)$/;
 
 describe('Marathi dictionary', () => {
   it('Marathi is the default language', () => {
@@ -96,6 +115,26 @@ describe('every value the interface renders has a label in both languages', () =
     ...DEFAULT_CONFIGURATION_CATALOGUE.parameters.flatMap((p) => (p.choices ?? []).map((c) => `enum.config.${c}`)),
     ...['discount_above_authority', 'margin_below_floor', 'no_cost_basis'].map((r) => `enum.approval_reason.${r}`),
     ...['verified', 'low_accuracy', 'permission_denied', 'unavailable'].map((g) => `enum.gps.${g}`),
+    // Slice 4: order, project, payments, BOM, purchasing and receipts.
+    ...[orderMachine, projectMachine, paymentMachine, materialLineMachine, bomMachine, purchaseRequestMachine, purchaseOrderMachine].flatMap((m) =>
+      m.transitions.flatMap((tr) => [`action.${tr.action}`, `audit.action.${tr.auditEvent}`]),
+    ),
+    ...PROJECT_STATES.map((s) => `project.state.${s}`),
+    ...ORDER_STATES.map((s) => `order.state.${s}`),
+    ...PAYMENT_STATES.map((s) => `payment.state.${s}`),
+    ...MATERIAL_STATES.map((s) => `material.state.${s}`),
+    ...BOM_STATES.map((s) => `bom.state.${s}`),
+    ...PURCHASE_REQUEST_STATES.map((s) => `procurement.request_state.${s}`),
+    ...PURCHASE_ORDER_STATES.map((s) => `procurement.po_state.${s}`),
+    ...ORDER_HANDOVER_ITEMS.flatMap((k) => [`order.check.${k}`, `field.handover.${k}`]),
+    ...DEFAULT_MILESTONE_TEMPLATES.flatMap((tpl) => [`enum.milestone_template.${tpl.code}`, ...tpl.items.flatMap((i) => [`enum.milestone.${i.code}`, `enum.milestone_trigger.${i.trigger}`])]),
+    ...PAYMENT_MODES.map((m) => `enum.payment_mode.${m}`),
+    ...GATED_ACTIONS.map((a) => `enum.gated_action.${a}`),
+    ...INSPECTION_RESULTS.map((r) => `enum.inspection.${r}`),
+    ...['po_above_limit', 'payment_not_verified'].map((r) => `enum.approval_reason.${r}`),
+    ...['quotation_discount', 'purchase_order', 'payment_exception'].flatMap((k) => [`approvals.kind.${k}`, `approvals.consequence.${k}`]),
+    ...['confirm', 'mark_ready', 'dispatch', 'mark_delivered'].map((a) => `action.material.${a}`),
+    ...['verify', 'verify_partially', 'request_clarification', 'reject'].flatMap((d) => [`payment.decision.${d}`, `payment.decided_${d}`]),
   ];
   it.each(required)('%s', (key) => {
     expect(hasMessage(key)).toBe(true);
