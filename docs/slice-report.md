@@ -53,6 +53,16 @@ RLS enabled on every table; clients hold SELECT only. Scope rules: tenant isolat
 
 ## 7. Tests run and actual results
 
+**Slice 6 run (2026-11-07, this environment):**
+
+| Suite | Result |
+|---|---|
+| Domain unit tests (`npm test`) | **995 passed** (new quality tests: inspection outcome with critical / not-applicable rules, required defect fields, open defect states, statutory evidence, warranty from the contractual start event; Marathi and English labels for every new state, action, criterion, document type and notification) |
+| Database integration (`npm run test:db`) | **80 passed**: 3 Slice 6 tests (independent QA, defect → acknowledgement → correction evidence → resubmission → verification; final QA, statutory evidence verified by a second person, handover package, customer acceptance, lift asset and warranty, close; customer and partner isolation) + parity for the 3 new machines, 4 rules, 60 random inspection cases and the warranty end date |
+| Typecheck all workspaces, `check:i18n` | passed (2,650 dictionary keys, no hard-coded English) |
+| Browser E2E (production build) | **77/77 in Marathi** (with the visible-English scan) and **77/77 in English**: 11 new Slice 6 steps across QA inspector, partner admin, technician, Operations, Owner and customer |
+| GitHub Actions CI on the PR | passed |
+
 **Slice 5 run (2026-11-07, this environment):**
 
 | Suite | Result |
