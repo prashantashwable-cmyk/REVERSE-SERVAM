@@ -50,6 +50,17 @@ RLS enabled on every table; clients hold SELECT only. Scope rules: tenant isolat
 
 ## 7. Tests run and actual results
 
+**Slice 5 run (2026-11-07, this environment):**
+
+| Suite | Result |
+|---|---|
+| Domain unit tests (`npm test`) | **872 passed** (17 new execution tests: Gate 7 per lift category and expiry, invitation machine, Gate 8, safety pre-start with no override, task template, prerequisites, Gate 9, daily report; Marathi and English labels for every new state, action, audit event, enum, checklist item and safety control) |
+| Database integration (`npm run test:db`) | **76 passed**: 9 Slice 5 tests (onboarding and AIEC-only verification, eligibility and tenant isolation, site readiness, invitations bound to the offer hash, installation readiness, skilled assignment and safety-gated start, Gate 9 submission and immutable evidence, safety stop lifted only by AIEC, daily reports) + parity for the 3 new machines, 4 rules, 60 random compliance / site-readiness / safety cases |
+| Typecheck all workspaces, `check:i18n` | passed (2,352 dictionary keys, no hard-coded English) |
+| Browser E2E (production build) | **67/67 in Marathi** (with the visible-English scan) and **67/67 in English**: 15 new Slice 5 steps across Owner, Operations, partner admin, technician and a second partner |
+
+Defects found and fixed while building Slice 5: an existing label (`field.assignee_id`, "Sales owner") would have been renamed for tasks (separate key added); names on record cards failed through the test gateway because the names RPC took `uuid[]` (it now takes a JSON array); a safety check recorded before a safety stop was still shown as "safe to start" (only checks after the latest stop count, matching the server rule); four E2E steps waited for a button to disappear, which also happens while it shows "Working…" (they now wait for the server action's response).
+
 **Slice 4 run (2026-11-07, this environment):**
 
 | Suite | Result |
