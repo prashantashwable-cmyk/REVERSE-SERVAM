@@ -1,4 +1,4 @@
-# Slice report — Slices 1, 2 & 3 (§65)
+# Slice report — Slices 1, 2, 3 & 4 (§65)
 
 ## 1. Files inspected
 
@@ -27,6 +27,7 @@
 | `20261106000500_directory.sql` | `list_assignable_users` (id + name only) |
 | `20261106000600_locale.sql` | Marathi default for new profiles; `set_my_locale` (audited) |
 | `20261106000700_technical_quotation.sql` | **Slice 3.** Transitions for technical review, document revision and quotation (seeded from the domain); launch rules (configuration catalogue, tax codes, discount policy, validity); `technical_reviews` (bound to the exact submitted survey revision, decisions immutable); `configuration_revisions` (catalogue-checked, checksum, frozen when approved, one draft / one approved per lead); `technical_documents` + `document_revisions` in a private `technical-documents` bucket (approval names the file checksum; new upload never replaces the approved revision); `quotations`, `quotation_revisions`, `quotation_lines` (server-computed paise, mirror of `computeQuotation`), append-only `quotation_negotiations` and `customer_acceptances`, `approval_requests` (O04); RPCs and RLS (prices/costs only for the lead's sales owner and Owner) |
+| `20261107000800_order_procurement.sql` | **Slice 4.** Enums and transitions for order, project, payment, material line, BOM, purchase request and purchase order (seeded from the domain); rules `payment.milestone_templates` and `procurement.po_approval_limit`; `app.allocate` (largest remainder) and `app.compute_purchase_order` (parity-tested with the domain); orders, projects (title / site snapshot), immutable payment milestones, payment claims (decided claims immutable, recorder ≠ verifier), Gate 5 `app.payment_gate`, BOM revisions / lines (approved lines locked), purchase requests / lines (Gate 6), supplier quotes, purchase orders / lines (fixed lines, per-line material status), goods receipts (only accepted, undamaged quantity counts); 20 RPCs; RLS separating project, customer-money and supplier-price visibility; `staff_display_names` (names only) |
 
 ## 4. Screens / routes completed
 
@@ -34,15 +35,28 @@ Web: `/login`, `/auth/callback`, `/auth/signout`, `/setup-required`, `/` (role-a
 
 Mobile (Android): Login (OTP), SV01 My surveys (offline cache, online/sync chips, pull to refresh), SV02–SV10 in one survey workspace (accept, check-in with honest GPS exception, building / shaft / machine room / electrical / logistics sections, measurements with explicit unit selector, camera evidence per category, documents or unavailability reason, review with Gate 1 preview and plausibility warnings, submit), SV11 revisit / inaccessible / start revision, WT09-style Sync queue with per-record status and conflict discard.
 
+Slice 4 web: `/projects` (list, status filter), `/projects/[id]` (order, handover acceptance, Gate 5 status per step, milestone table with verified / outstanding money from the domain `milestoneStatuses`, payment claims with record / verify / resubmit, exception requests, BOM editor and approval, purchase requests and orders, new purchase request from approved BOM lines), `/procurement` (open requests, active and finished POs), `/procurement/requests/[id]` (lines, side-by-side supplier quotes with the lowest matching offer marked, add quote, select supplier with rationale, create PO), `/procurement/orders/[id]` (totals, submit / approval / issue, per-line material status buttons, goods receipt with inspection, receipt history), `/finance` (claims to verify, oldest first, recent decisions), convert-to-order card on `/quotations/[id]`, PO and payment-exception cards in `/approvals`, nav items and four KPIs (projects awaiting handover acceptance, claims to verify, open purchase requests, POs awaiting receipt). All in Marathi and English.
+
 ## 5. APIs / server actions completed
 
-See `docs/api-contracts.md` — 10 identity/admin RPCs, 8 lead RPCs, 10 survey/evidence RPCs, 1 directory RPC, 1 locale RPC, and 16 Slice 3 RPCs (technical review 3, configuration 2, documents 3, quotations 7, approvals 1).
+See `docs/api-contracts.md` — 10 identity/admin RPCs, 8 lead RPCs, 10 survey/evidence RPCs, 1 directory RPC, 1 locale RPC, 16 Slice 3 RPCs (technical review 3, configuration 2, documents 3, quotations 7, approvals 1), and 21 Slice 4 RPCs (orders / projects 2, payments 5, BOM 2, purchasing 11, staff names 1).
 
 ## 6. RLS / permission rules implemented
 
 RLS enabled on every table; clients hold SELECT only. Scope rules: tenant isolation for partner people data, lead visibility (owner or `lead.read_all`), survey visibility (assigned surveyor, `survey.read_all`, the lead's owner), sales history hidden from field and technical roles, audit to `audit.read`, private evidence storage bound to survey scope with upload only by the assigned surveyor during capture and no update/delete. Segregation of duties listed in `docs/permission-matrix.md`.
 
 ## 7. Tests run and actual results
+
+**Slice 4 run (2026-11-07, this environment):**
+
+| Suite | Result |
+|---|---|
+| Domain unit tests (`npm test`) | **664 passed** (PO maths, goods-receipt acceptance, milestone templates, machines, Marathi and English labels for every new state, action, audit event, enum and handover item) |
+| Database integration (`npm run test:db`) | **66 passed**: 9 Slice 4 tests (Gate 4 conversion, handover acceptance, claims vs verified money and recorder ≠ verifier, time-limited exceptions, BOM approval and locking, Gate 6 purchase requests, PO approval limit with segregation of duties, partial receipts, staff names) + parity for the 7 new machines, rules, allocation and PO totals |
+| Typecheck all workspaces, `check:i18n` | passed (1,845 dictionary keys, no hard-coded English) |
+| Browser E2E (production build) | **52/52 in Marathi** (with the visible-English scan) and **52/52 in English**: 16 new Slice 4 steps from order conversion to a closed PO, plus "procurement does not see the contract value" and "sales cannot open the PO" |
+
+Defects found and fixed while building Slice 4: payment exceptions appeared in a quotation's approval history (now filtered by kind); approval-decided notifications for POs linked to a page Procurement cannot open (now link to `/procurement`); Finance could not see supplier names (policy extended) or who recorded a claim (names-only RPC); two E2E races (acting before a page had refreshed / hydrated).
 
 **Slice 3 run (2026-11-07, this environment):**
 
@@ -87,8 +101,9 @@ Not run here: web flows against a hosted Supabase project (the E2E gateway stand
 
 ## 8. Known limitations and unresolved decisions
 
-- Slices 4–6 exist as tested domain rules only. Orders, projects, payments, procurement, partner compliance, tasks, QA, handover and warranty are **not usable** in the product yet.
-- Slice 3 scope notes: structured BOM lines (TE05) and technical change requests (TE06) are deferred to Slice 4, where procurement consumes them (a BOM can be controlled today as a checksum-approved document); customer self-service acceptance (CU04) waits for the customer portal — Sales records acceptance with acceptor, authority, channel and evidence, bound to the issued content hash (D-023); quotation expiry is enforced at issue / acceptance (no background job yet); a PDF rendering of the customer quotation is not generated.
+- Slices 5–6 exist as tested domain rules only. Partner compliance, tasks, QA, handover and warranty are **not usable** in the product yet.
+- Slice 4 scope notes: technical change requests (TE06) and component substitution, PO cancellation after issue, supplier onboarding screens (suppliers are organizations created by an administrator), customer invoices / accounting export and payment-gateway or bank-statement import are not built. Gate 5 is enforced for procurement; dispatch / installation / handover gates are shown and will be enforced by the Slice 5 workflows. Milestone templates (D-026) and the PO limit (D-027) are launch placeholders.
+- Slice 3 scope notes: customer self-service acceptance (CU04) waits for the customer portal — Sales records acceptance with acceptor, authority, channel and evidence, bound to the issued content hash (D-023); quotation expiry is enforced at issue / acceptance (no background job yet); a PDF rendering of the customer quotation is not generated.
 - Discount limit 5%, margin floor 15%, GST 18% and 30-day validity are launch placeholders pending Owner / Finance confirmation (D-004, D-005, D-011, D-022).
 - No external messaging (WhatsApp/SMS/email), payments, e-sign, push notifications or accounting export; notifications are in-app records.
 - Duplicate *merge execution* is not implemented (requests are recorded and routed).
@@ -101,4 +116,4 @@ Not run here: web flows against a hosted Supabase project (the E2E gateway stand
 
 ## 9. Next recommended slice
 
-**Slice 4 — Order to procurement**: order conversion from an accepted quotation revision (Gate 4, `order.convert`, contract record), project creation and handover checklist (SE11), payment milestone schedule from a configurable template with Finance verification (Gate 5), structured BOM lines mapped to the approved configuration (TE05) and technical change requests (TE06), purchase requests, supplier POs with approval and GRN — each with RLS, audit, DB tests, Marathi + English screens and E2E steps in the same style.
+**Slice 5 — Partner execution and QA**: partner onboarding and compliance (Gate 7: documents, expiry, eligibility), project scheduling and readiness (Gate 8), task assignment to an eligible partner team with tenant-isolated project access, technician task execution with offline evidence (WT01–WT06), dispatch gated by the pre-dispatch milestone, QA inspection, defects and rework (Gates 9–11), and the partner / technician mobile flows.

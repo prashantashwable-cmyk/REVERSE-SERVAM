@@ -5,6 +5,7 @@ import { ErrorPanel, PermissionDenied } from '@/components/ui-client';
 import { can, getContext } from '@/lib/context';
 import { dt } from '@/lib/format';
 import { getT } from '@/lib/i18n';
+import { staffNames } from '@/lib/people';
 import { supabaseServer } from '@/lib/supabase/server';
 import { DecideClaimForm } from '../projects/project-forms';
 
@@ -31,12 +32,12 @@ export default async function FinancePage() {
   const all = [...(waiting.data ?? []), ...(decided.data ?? [])];
   const projectIds = [...new Set(all.map((c) => c.project_id))];
   const people = [...new Set(all.flatMap((c) => [c.submitted_by, c.verified_by]).filter(Boolean))] as string[];
-  const [{ data: projects }, { data: profiles }] = await Promise.all([
+  const [{ data: projects }, staff] = await Promise.all([
     projectIds.length ? supabase.from('projects').select('id, project_number, title').in('id', projectIds) : Promise.resolve({ data: [] as any[] }),
-    people.length ? supabase.from('user_profiles').select('id, full_name').in('id', people) : Promise.resolve({ data: [] as any[] }),
+    staffNames(people),
   ]);
   const project = new Map((projects ?? []).map((p: any) => [p.id, p]));
-  const name = new Map((profiles ?? []).map((p: any) => [p.id, p.full_name ?? t('common.unnamed_user')]));
+  const name = new Map([...staff].map(([id, n]) => [id, n ?? t('common.unnamed_user')]));
 
   return (
     <>

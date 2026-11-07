@@ -5,6 +5,7 @@ import { ErrorPanel, PermissionDenied } from '@/components/ui-client';
 import { can, getContext } from '@/lib/context';
 import { dt } from '@/lib/format';
 import { getT } from '@/lib/i18n';
+import { staffNames } from '@/lib/people';
 import { supabaseServer } from '@/lib/supabase/server';
 import { DecideRequestForm } from '../procurement/procurement-forms';
 import { ApprovalDecisionForm } from '../quotations/quotation-forms';
@@ -34,9 +35,9 @@ export default async function ApprovalsPage() {
   const revIds = [...new Set(all.filter((a) => a.kind === 'quotation_discount').map((a) => a.entity_id))];
   const supplierIds = [...new Set(all.filter((a) => a.kind === 'purchase_order').map((a) => a.impact?.supplier_id).filter(Boolean))] as string[];
   const people = [...new Set(all.flatMap((a) => [a.requested_by, a.decided_by]).filter(Boolean))] as string[];
-  const [{ data: revs }, { data: profiles }, { data: suppliers }] = await Promise.all([
+  const [{ data: revs }, staff, { data: suppliers }] = await Promise.all([
     revIds.length ? supabase.from('quotation_revisions').select('id, quotation_id').in('id', revIds) : Promise.resolve({ data: [] as any[] }),
-    people.length ? supabase.from('user_profiles').select('id, full_name').in('id', people) : Promise.resolve({ data: [] as any[] }),
+    staffNames(people),
     supplierIds.length ? supabase.from('organizations').select('id, name').in('id', supplierIds) : Promise.resolve({ data: [] as any[] }),
   ]);
   const supplierName = new Map((suppliers ?? []).map((x: any) => [x.id, x.name]));
@@ -45,7 +46,7 @@ export default async function ApprovalsPage() {
     : a.kind === 'payment_exception' ? t('approvals.exception_card_title', { project: a.impact?.project_number ?? '' })
     : t('approvals.card_title', { quotation: a.impact?.quotation_number ?? '', no: a.impact?.revision_no ?? '' });
   const quotationOf = new Map((revs ?? []).map((r: any) => [r.id, r.quotation_id]));
-  const name = new Map((profiles ?? []).map((p: any) => [p.id, p.full_name ?? t('common.unnamed_user')]));
+  const name = new Map([...staff].map(([id, n]) => [id, n ?? t('common.unnamed_user')]));
   const days = (iso: string) => Math.max(0, Math.floor((Date.now() - Date.parse(iso)) / 864e5));
 
   return (

@@ -145,6 +145,16 @@ const expectText = (page, text) => async () => {
       union all select coalesce(source_exception_reason, '') from evidence_files
       union all select coalesce(reason, '') from audit_logs
       union all select coalesce(reason, '') from lead_duplicate_decisions
+      union all select contract_reference || ' ' || coalesce(notes, '') from orders
+      union all select title || ' ' || site_label || ' ' || coalesce(handover_notes, '') from projects
+      union all select payer_name || ' ' || payment_reference || ' ' || coalesce(evidence_note, '') || ' ' || coalesce(matched_statement_reference, '') || ' ' || coalesce(decision_reason, '') from payment_claims
+      union all select coalesce(change_summary, '') from bom_revisions
+      union all select item_code || ' ' || description || ' ' || unit || ' ' || coalesce(make_model, '') || ' ' || coalesce(specification, '') || ' ' || coalesce(source, '') from bom_lines
+      union all select coalesce(notes, '') || ' ' || coalesce(selection_rationale, '') || ' ' || coalesce(status_reason, '') from purchase_requests
+      union all select coalesce(payment_terms, '') || ' ' || coalesce(notes, '') from supplier_quotes
+      union all select delivery_location || ' ' || payment_terms || ' ' || coalesce(terms, '') || ' ' || coalesce(status_reason, '') from purchase_orders
+      union all select coalesce(serial_batch, '') || ' ' || coalesce(remarks, '') from goods_receipt_lines
+      union all select coalesce(decision_reason, '') || ' ' || coalesce(impact ->> 'justification', '') from approval_requests
     ) q`);
   addData(rows[0].t);
   await db.end();
@@ -413,7 +423,7 @@ const expectText = (page, text) => async () => {
   await op.fill('#handover_notes', 'Accepted; plan the site visit');
   await op.click(`button:has-text("${T('project.acknowledge')}")`);
   await op.getByRole('button', { name: T('project.acknowledge') }).waitFor({ state: 'detached', timeout: 15000 });
-  await op.reload();
+  await op.reload(); await op.waitForLoadState('networkidle');
   await snap(op, 's4-ops-handover-accepted-gate-blocked', async () => {
     await op.getByText(T('project.state.planning')).first().waitFor({ timeout: 8000 });
     await op.getByText(T('gate5.blocked')).first().waitFor({ timeout: 8000 });
@@ -428,7 +438,7 @@ const expectText = (page, text) => async () => {
   await sq.fill('#evidence_note', 'Advance by NEFT');
   await sq.click(`button:has-text("${T('payment.record_claim')}")`);
   await sq.getByText(T('payment.state.claimed')).first().waitFor({ timeout: 15000 });
-  await sq.reload();
+  await sq.reload(); await sq.waitForLoadState('networkidle');
   await snap(sq, 's4-sales-advance-claim-recorded', expectText(sq, T('payment.state.claimed')));
 
   const fp = await login(browser, 'finance1');
@@ -439,7 +449,7 @@ const expectText = (page, text) => async () => {
   addData(`HDFC statement line ${utr}`);
   await claimCard.getByRole('button', { name: T('payment.record_decision') }).click();
   await claimCard.waitFor({ state: 'detached', timeout: 15000 });
-  await fp.reload();
+  await fp.reload(); await fp.waitForLoadState('networkidle');
   await snap(fp, 's4-finance-advance-verified', expectText(fp, T('payment.state.verified')));
 
   await tq.goto(projectUrl);
@@ -450,7 +460,7 @@ const expectText = (page, text) => async () => {
   await tq.getByRole('button', { name: T('bom.approve') }).waitFor({ timeout: 15000 });
   await tq.click(`button:has-text("${T('bom.approve')}")`);
   await tq.getByRole('button', { name: T('bom.approve') }).waitFor({ state: 'detached', timeout: 15000 });
-  await tq.reload();
+  await tq.reload(); await tq.waitForLoadState('networkidle');
   await snap(tq, 's4-tech-bom-approved', expectText(tq, T('bom.state.approved')));
 
   const pp = await login(browser, 'procure1');
@@ -471,7 +481,7 @@ const expectText = (page, text) => async () => {
   await pp.fill('#rationale', 'Lowest matching price');
   await pp.click(`button:has-text("${T('procurement.select_supplier')}")`);
   await pp.getByRole('button', { name: T('procurement.create_po') }).waitFor({ timeout: 15000 });
-  await pp.reload();
+  await pp.reload(); await pp.waitForLoadState('networkidle');
   await snap(pp, 's4-procurement-quotes-compared-supplier-selected', expectText(pp, T('procurement.selected')));
   const rates = ['450000', '20000'];
   let ri = 0;
@@ -494,19 +504,26 @@ const expectText = (page, text) => async () => {
   await pp.goto(poUrl);
   await pp.click(`button:has-text("${T('procurement.issue_po')}")`);
   await pp.getByRole('button', { name: T('procurement.issue_po') }).waitFor({ state: 'detached', timeout: 15000 });
-  for (const label of ['confirm', 'mark_ready', 'dispatch', 'mark_delivered'].map((a) => T(`action.material.${a}`))) {
-    for (let n = await pp.getByRole('button', { name: label, exact: true }).count(); n > 0; n--) {
-      await pp.getByRole('button', { name: label, exact: true }).first().click();
-      await pp.waitForFunction(([l, c]) => [...document.querySelectorAll('button')].filter((b) => b.textContent === l).length < c, [label, n], { timeout: 15000 });
-    }
+  await pp.reload(); await pp.waitForLoadState('networkidle');
+  await pp.getByRole('button', { name: T('action.material.confirm'), exact: true }).first().waitFor({ timeout: 15000 });
+  // Advance every line to delivered, one click per refresh (each click re-renders the row).
+  const materialLabels = ['confirm', 'mark_ready', 'dispatch', 'mark_delivered'].map((a) => T(`action.material.${a}`));
+  for (let guard = 0; guard < 12; guard++) {
+    await pp.reload(); await pp.waitForLoadState('networkidle');
+    const next = pp.locator('button').filter({ hasText: new RegExp(`^(${materialLabels.join('|')})$`) });
+    if ((await next.count()) === 0) break;
+    // The server action's POST returns after the database update; the row may unmount right after.
+    const posted = pp.waitForResponse((r) => r.request().method() === 'POST' && r.url().includes('/procurement/orders/'), { timeout: 15000 });
+    await next.first().click();
+    await posted;
   }
-  await pp.reload();
+  await pp.reload(); await pp.waitForLoadState('networkidle');
   await snap(pp, 's4-procurement-lines-delivered', expectText(pp, T('procurement.grn_title')));
   // First receipt: line 1 in full, line 2 only one of two (a partial receipt never completes a line).
   for (const input of await pp.locator('input[name^="received_"]').all()) await input.fill('1');
   await pp.click(`button:has-text("${T('procurement.record_grn')}")`);
   await pp.getByText(T('material.state.received')).first().waitFor({ timeout: 15000 });
-  await pp.reload();
+  await pp.reload(); await pp.waitForLoadState('networkidle');
   await snap(pp, 's4-procurement-partial-receipt', async () => {
     await pp.getByText(T('material.state.received')).first().waitFor({ timeout: 8000 });
     await pp.getByText(T('procurement.po_state.issued')).first().waitFor({ timeout: 8000 });
@@ -516,7 +533,7 @@ const expectText = (page, text) => async () => {
   for (const input of await pp.locator('input[name^="remarks_"]').all()) await input.fill('Received in good condition');
   await pp.click(`button:has-text("${T('procurement.record_grn')}")`);
   await pp.getByText(T('procurement.po_state_note.closed')).waitFor({ timeout: 15000 });
-  await pp.reload();
+  await pp.reload(); await pp.waitForLoadState('networkidle');
   await snap(pp, 's4-procurement-po-closed', expectText(pp, T('procurement.po_state.closed')));
   await snap(sq, 's4-sales-cannot-see-purchasing', async () => {
     await sq.goto(poUrl);

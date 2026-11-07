@@ -34,8 +34,12 @@ npm run build:demo && (cd docs && python3 -m http.server 8765 &) && node e2e/dem
 
 Refresh the database (step 1) before each run: the scenario creates leads whose names would otherwise be (correctly) flagged as duplicates on the next run.
 
-## What it covers (36 checks)
+## What it covers
 
 Sales: home KPIs, lead list, validation errors, lead creation, duplicate review (values kept), activity → contacted, qualification with score, survey booking, survey detail. Owner: KPIs with stated basis, audit log, users & roles, read-only lead view. Technical manager: review queue, measurements + evidence, return for revision, no access to sales leads. Partner admin: no lead access, sees only own team. Pending account banner. 390 px mobile width without horizontal overflow.
+
+Slice 3: technical queue → feasibility decision → configuration → controlled document → quotation above authority → Owner approval → issue → recorded acceptance; a technical reviewer cannot open prices.
+
+Slice 4: Sales converts the accepted revision with the handover checklist (project opens); Operations sees the KPI, accepts the handover and sees procurement blocked by Gate 5; Sales records the advance; Finance verifies it against a statement; Technical prepares and approves the BOM; Procurement (who never sees the customer contract value) raises a purchase request from BOM lines, records a quote, selects the supplier with a rationale and creates a PO above the ₹5,00,000 limit; Operations approves it; Procurement issues it, moves each line to delivered, records a partial receipt (the line stays open) and the rest (the PO closes); Sales cannot open the PO.
 
 Slice 3 (11 checks): a fresh survey is seeded through the real RPCs; Technical starts the review from the queue, records a feasible decision, builds and approves the configuration, uploads a shaft layout (server-side checksum), submits and approves it; Sales sees the technical summary, creates a quotation with a 12% discount, which goes to the Owner; the Owner approves in the approval center; Sales issues and records acceptance bound to the content hash; the technical reviewer cannot open the quotation.

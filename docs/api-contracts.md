@@ -92,6 +92,35 @@ Operator-only (SQL editor, not exposed to API roles): `app.bootstrap_platform(ow
 | `revise_quotation` | `p_quotation_id`, `p_reason` | lead owner | New draft revision (copy, current approved configuration); supersedes the open one, withdraws a pending request; accepted quotations cannot be revised | `quotation.superseded`, `quotation.revised` |
 | `add_quotation_negotiation` | `p_quotation_id`, `p_payload` {occurred_at, contact, topic, requested_change, requested_discount_bps, expected_impact, decision} | lead owner | Append-only log | `quotation.negotiation_recorded` |
 
+## Orders, projects and payments (Slice 4)
+
+| RPC | Arguments | Who | Behaviour | Audit / notify |
+|---|---|---|---|---|
+| `convert_quotation_to_order` | `p_operation_id`, `p_revision_id`, `p_payload` {contract_reference, contract_date, milestone_template, handover_checklist {8 items}, notes} | lead owner with `order.convert` | Gate 4: only the accepted, current revision; one order (OR-…) per lead; every handover item true; contract date not in the future. Creates the order (confirmed), marks the lead won, creates the project (AIEC-…) with a title / site snapshot and the payment milestones (largest-remainder split of the contract value) | `order.confirmed`, `lead.won`, `project.created`; notifies `project.plan` holders |
+| `acknowledge_project_handover` | `p_project_id`, `p_expected_version`, `p_notes` | `project.plan` | created → planning | `project.planning_started` |
+| `record_payment_claim` | `p_operation_id`, `p_project_id`, `p_payload` {milestone_code, payer_name, amount_paise, payment_mode, payment_reference, payment_date, evidence_note} | lead owner with `order.convert`, or `finance.payment.verify` | Records a claim (PM-…); a claim never counts as money | `payment.claimed`; notifies Finance |
+| `decide_payment_claim` | `p_claim_id`, `p_expected_version`, `p_decision` (verify / verify_partially / request_clarification / reject), `p_payload` {verified_amount_paise, matched_statement_reference, reason} | `finance.payment.verify`, never the recorder | Verification needs a matched statement reference; full = claimed amount, partial strictly between 0 and it; decided claims are immutable | `payment.*`; notifies the recorder |
+| `resubmit_payment_claim` | `p_claim_id`, `p_expected_version`, `p_payload` {payment_reference, evidence_note} | the lead owner | After a clarification request | `payment.resubmitted` |
+| `request_payment_exception` | `p_project_id`, `p_action`, `p_reason`, `p_expires_at` | `project.plan` | Only while the gate is blocked; time-limited | `payment_exception.requested`; notifies `approval.exception.decide` |
+| `project_payment_gate` | `p_project_id`, `p_action` | anyone who can read the project | `{open, blocking[], viaException}` — the same rule as the domain `paymentGate` | — |
+
+## BOM, purchasing and receipts (Slice 4)
+
+| RPC | Arguments | Who | Behaviour | Audit / notify |
+|---|---|---|---|---|
+| `save_bom_draft` | `p_project_id`, `p_expected_version` (null for a new revision), `p_lines` [{item_code, description, make_model, specification, quantity_milli, unit, source, technical_notes}], `p_change_summary` | `technical.review` | One draft per project, bound to the project's configuration revision | `bom.saved` |
+| `approve_bom` | `p_bom_revision_id`, `p_expected_version` | `technical.drawing.approve` | Needs lines and an approved configuration; supersedes the previous approved revision; approved lines are locked | `bom.approved`, `bom.superseded`; notifies Procurement |
+| `create_purchase_request` | `p_operation_id`, `p_project_id`, `p_payload` {required_by, preferred_supplier_id, budget_estimate_paise, notes, lines [{bom_line_id, quantity_milli}]} | `procurement.request.create` | Project in planning / installation; Gate 5 `procurement` open; Gate 6: only lines of the approved BOM, never more than the BOM quantity across open requests | `purchase_request.created` |
+| `add_supplier_quote` | `p_request_id`, `p_payload` {supplier_id, net_paise, tax_paise, freight_paise, lead_time_days, warranty_months, technical_match, payment_terms, notes} | `procurement.po.create` | Active supplier organizations only | `purchase_request.quote_recorded` |
+| `select_supplier` | `p_request_id`, `p_expected_version`, `p_quote_id`, `p_rationale` | `procurement.po.create` | Rationale required | `purchase_request.supplier_selected` |
+| `cancel_purchase_request` | `p_request_id`, `p_expected_version`, `p_reason` | `procurement.request.create` | Frees the quantities | `purchase_request.cancelled` |
+| `create_purchase_order` | `p_operation_id`, `p_request_id`, `p_payload` {lines [{request_line_id, rate_paise, tax_rate_bps}], freight_paise, delivery_from, delivery_to, delivery_location, payment_terms, terms} | `procurement.po.create` | Selected supplier; server totals (`app.compute_purchase_order` = domain `computePurchaseOrder`); flags `needs_approval` above rule `procurement.po_approval_limit` | `purchase_order.created`, `purchase_request.ordered` |
+| `submit_purchase_order` | `p_po_id`, `p_expected_version` | `procurement.po.create` | Within the limit → approved; above → pending approval + approval request | `purchase_order.finalized` / `.approval_requested`; notifies `procurement.po.approve` |
+| `decide_approval_request` | `p_request_id`, `p_decision` (approve / reject), `p_reason` | `procurement.po.approve` (PO) or `approval.exception.decide` (payment exception); never the requester | Reason for reject; an expired exception cannot be approved | `approval.decided`; notifies the requester |
+| `issue_purchase_order` | `p_po_id`, `p_expected_version` | `procurement.po.create` | approved → issued | `purchase_order.issued` |
+| `update_material_status` | `p_po_line_id`, `p_expected_version`, `p_action` (confirm / start_manufacturing / mark_ready / dispatch / mark_in_transit / mark_delivered) | `procurement.po.create` | Issued POs only; per-line material machine | `material.*` |
+| `record_goods_receipt` | `p_operation_id`, `p_po_id`, `p_payload` {lines [{po_line_id, received_milli, damaged_milli, result, serial_batch, remarks}], notes} | `procurement.grn.record` | Delivered lines only; never more than ordered; only accepted, undamaged quantity counts; a remark for anything not accepted; the PO closes when every line is accepted | `material.received` / `accepted` / …, `purchase_order.closed` |
+
 ## Read access (RLS summary)
 
 | Data | Visible to |
@@ -108,3 +137,5 @@ Operator-only (SQL editor, not exposed to API roles): `app.bootstrap_platform(ow
 | Notifications, sync operations | the recipient / the operation's user |
 
 Slice 3 reads: technical records follow `technical.review` / `survey.read_all` in the organization, or the lead (sales owner, Owner); draft documents are technical-only. Quotations, lines (with internal cost), negotiations and acceptances follow the lead only: technical, field, partner and customer roles never see prices. Approval requests: approvers and the requester.
+
+Slice 4 reads: a project (no money) is visible to Operations / Owner (`project.read_all`), Technical, Finance, Procurement and the lead's sales owner. Orders, milestones and payment claims (customer money) only to Operations / Owner, Finance and the lead's sales owner. Purchase requests, supplier quotes, POs and goods receipts (supplier prices) only to Procurement, Operations / Owner and Finance. Supplier organizations are readable by Procurement, Operations / Owner and Finance.

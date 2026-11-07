@@ -1565,8 +1565,36 @@ begin
 end;
 $$;
 
+-- Display names of AIEC staff for record cards (who recorded / requested / decided).
+-- Finance, Procurement and Operations cannot read other profiles under RLS; this returns
+-- only id + name, only of AIEC members, and only to an active AIEC member.
+create function public.staff_display_names(p_ids uuid[])
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+declare
+  v_uid uuid := app.require_actor();
+  v_org uuid := app.aiec_org_id();
+begin
+  if not exists (select 1 from public.organization_memberships m join public.user_profiles up on up.id = m.user_id
+                 where m.user_id = v_uid and m.organization_id = v_org and m.status = 'active' and up.status = 'active') then
+    return '[]'::jsonb;
+  end if;
+  return coalesce((
+    select jsonb_agg(jsonb_build_object('id', up.id, 'full_name', up.full_name))
+    from public.user_profiles up
+    where up.id = any (coalesce(p_ids, '{}')) and cardinality(p_ids) <= 200
+      and exists (select 1 from public.organization_memberships m where m.user_id = up.id and m.organization_id = v_org)
+  ), '[]'::jsonb);
+end;
+$$;
+
 revoke execute on all functions in schema public from public, anon;
 grant execute on function
+  public.staff_display_names(uuid[]),
   public.convert_quotation_to_order(uuid, uuid, jsonb),
   public.acknowledge_project_handover(uuid, integer, text),
   public.record_payment_claim(uuid, uuid, jsonb),

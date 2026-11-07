@@ -262,3 +262,15 @@ describe('Slice 4 — purchase orders, material tracking and goods receipt (PR03
     expect(status).toBe('issued'); // never closed while anything is outstanding
   });
 });
+
+describe('Slice 4 — staff names on record cards', () => {
+  it('AIEC staff see only id + name of AIEC staff; partners and pending users see nothing', async () => {
+    const ids = `{${[fx.users.sales1, fx.users.finance1, fx.users.partnerA_admin].join(',')}}`; // uuid[] literal
+    const seen = await as('finance1').rpc('staff_display_names', { p_ids: ids });
+    expect(seen.map((p: { id: string }) => p.id).sort()).toEqual([fx.users.sales1, fx.users.finance1].sort());
+    expect(Object.keys(seen[0]).sort()).toEqual(['full_name', 'id']);
+    expect(await as('partnerA_admin').rpc('staff_display_names', { p_ids: ids })).toEqual([]);
+    await expectCode(as('pending1').rpc('staff_display_names', { p_ids: ids }), 'ACCOUNT_NOT_ACTIVE');
+  });
+});
+
