@@ -20,6 +20,7 @@ const LINK: Record<string, (id: string) => string> = {
   technical_document: () => '/technical',
   project: (id) => `/projects/${id}`,
   payment_claim: () => '/finance',
+  task: (id) => `/work/${id}`,
 };
 
 
@@ -43,6 +44,10 @@ export default async function NotificationsPage() {
             {data.map((n) => {
               const href = n.event_type === 'approval.decided' && (n.payload as { kind?: string } | null)?.kind === 'purchase_order'
                 ? '/procurement'
+                : n.entity_type === 'partner' ? (n.event_type.startsWith('partner_document.registered') || n.event_type === 'partner.submitted' ? `/partners/${n.entity_id}` : '/partner/company')
+                : n.entity_type === 'partner_assignment' ? `/partner/assignments/${n.entity_id}`
+                : n.entity_type === 'task' && n.event_type !== 'task.assigned' ? '/partner'
+                : n.entity_type === 'project' && ((n.event_type.startsWith('project.') && n.event_type !== 'project.created') || n.event_type === 'daily_report.commented') ? '/partner'
                 : n.entity_type && n.entity_id && LINK[n.entity_type] ? LINK[n.entity_type]!(n.entity_id) : null;
               const ref = (n.payload as Record<string, string>)?.lead_number ?? (n.payload as Record<string, string>)?.survey_number ?? (n.payload as Record<string, string>)?.quotation_number ?? (n.payload as Record<string, string>)?.document_number ?? (n.payload as Record<string, string>)?.project_number ?? (n.payload as Record<string, string>)?.claim_number ?? (n.payload as Record<string, string>)?.po_number;
               return (

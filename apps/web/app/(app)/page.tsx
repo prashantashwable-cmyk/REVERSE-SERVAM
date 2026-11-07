@@ -81,6 +81,21 @@ export default async function Home() {
   if (can(ctx, 'procurement.grn.record')) {
     kpis.push({ key: 'pos_awaiting_receipt', href: '/procurement', count: await tableCount('purchase_orders', (q) => q.eq('status', 'issued')) });
   }
+  if (can(ctx, 'partner.verify')) {
+    kpis.push({ key: 'partner_documents_pending', href: '/partners', count: await tableCount('partner_documents', (q) => q.eq('verification', 'pending')) });
+  }
+  if (can(ctx, 'project.plan')) {
+    kpis.push({ key: 'safety_stops_open', href: '/projects?status=installation', count: await tableCount('execution_incidents', (q) => q.eq('status', 'open').eq('safety_stop', true)) });
+  }
+  if (can(ctx, 'partner.org.manage')) {
+    kpis.push({ key: 'partner_invitations', href: '/partner', count: await tableCount('project_partner_assignments', (q) => q.in('status', ['invited', 'clarification_requested'])) });
+  }
+  if (can(ctx, 'partner.task.assign')) {
+    kpis.push({ key: 'tasks_to_assign', href: '/partner', count: await tableCount('project_tasks', (q) => q.eq('status', 'draft')) });
+  }
+  if (can(ctx, 'task.execute')) {
+    kpis.push({ key: 'my_open_tasks', href: '/work', count: await tableCount('project_tasks', (q) => q.eq('assignee_user_id', ctx.user_id).in('status', ['assigned', 'accepted', 'in_progress', 'blocked', 'rework'])) });
+  }
   if (can(ctx, 'survey.schedule')) {
     kpis.push({ key: 'reschedule_requests', href: '/surveys?status=reschedule_requested', count: await surveyCount('reschedule_requested') });
   }

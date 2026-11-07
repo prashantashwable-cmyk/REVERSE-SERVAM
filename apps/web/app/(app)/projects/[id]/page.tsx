@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { GATED_ACTIONS, formatBps, formatInr, formatQuantityMilli, fromServerError, milestoneStatuses, paiseToInput } from '@aiec/domain';
 import { Badge, Card, EmptyState, KeyValue, PageHeader, StateBadge } from '@/components/ui';
-import { ErrorPanel } from '@/components/ui-client';
+import { ErrorPanel, PermissionDenied } from '@/components/ui-client';
 import { can, getContext } from '@/lib/context';
 import { dt } from '@/lib/format';
 import { getT } from '@/lib/i18n';
@@ -18,6 +18,7 @@ import {
   RequestExceptionForm,
   ResubmitClaimForm,
 } from '../project-forms';
+import { ExecutionSection } from './execution';
 
 export async function generateMetadata() {
   const { t } = await getT();
@@ -37,6 +38,8 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
   const result = await getContext();
   if (!result.ok) return <ErrorPanel code={result.error.code} />;
   const { ctx } = result;
+  // Partner people work in their own workspace (/partner); AIEC project pages are for AIEC staff.
+  if (!ctx.memberships.some((m) => m.organization_kind === 'aiec')) return <PermissionDenied whatKey="projects.what" />;
   const supabase = await supabaseServer();
 
   const { data: p, error } = await supabase.from('projects').select('*').eq('id', id).maybeSingle();
@@ -359,6 +362,10 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
             </div>
           ) : null}
         </Card>
+      ) : null}
+
+      {(['project.read_all', 'project.plan', 'partner.assign'] as const).some((x) => can(ctx, x)) && !['created', 'cancelled'].includes(p.status) ? (
+        <ExecutionSection project={p} ctx={ctx} t={t} locale={locale} />
       ) : null}
 
       {!milestones?.length && !order && !shownBom ? <EmptyState title={t('project.limited_view')} /> : null}

@@ -18,6 +18,8 @@ export default async function ProjectsPage({ searchParams }: { searchParams: Pro
   const result = await getContext();
   if (!result.ok) return <ErrorPanel code={result.error.code} />;
   const { ctx } = result;
+  // Partner people work in their own workspace (/partner); AIEC project pages are for AIEC staff.
+  if (!ctx.memberships.some((m) => m.organization_kind === 'aiec')) return <PermissionDenied whatKey="projects.what" />;
   const allowed = ['project.read_all', 'project.plan', 'technical.review', 'finance.ledger.read', 'procurement.request.create', 'procurement.po.create', 'order.convert'] as const;
   if (!allowed.some((p) => can(ctx, p))) return <PermissionDenied whatKey="projects.what" />;
   const sp = await searchParams;
