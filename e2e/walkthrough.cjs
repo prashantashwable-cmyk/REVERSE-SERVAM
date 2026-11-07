@@ -23,7 +23,7 @@ const T = (key, params = {}) => {
 // Words allowed to stay in Latin script on a Marathi page: brand / technical tokens and the
 // data the people typed (names, projects, addresses) collected below.
 const LATIN_OK = new Set(['AIEC', 'OS', 'GPS', 'IST', 'OTP', 'MRL', 'SMS', 'WhatsApp', 'PUN', 'PCMC', 'LD', 'SV', 'mm', 'cm', 'DEMO', 'Supabase', 'ID', 'demo', 'BOM', 'TR', 'QT', 'TD', 'kg', 'PDF', 'CSV', 'Excel', 'MB', 'SHA', 'GST',
-  'PR', 'PO', 'GRN', 'OR', 'PM', 'NEFT', 'RTGS', 'IMPS', 'UPI', 'UTR', // business-number prefixes and payment rails
+  'PR', 'PO', 'GRN', 'OR', 'PM', 'DF', 'LA', 'NEFT', 'RTGS', 'IMPS', 'UPI', 'UTR', // business-number prefixes and payment rails
   'LLP',
   'English', // the language switch names each language in its own script
 ]);
@@ -76,7 +76,48 @@ async function seedSubmittedSurvey(db) {
   return { leadId: lead.lead_id, surveyNumber: sv.survey_number, project };
 }
 
-const PHONES = { owner: '9000000000', sales1: '9000000001', surveyor2: '9000000004', tech1: '9000000005', ops1: '9000000006', partnerA_admin: '9000000007', partnerA_tech: '9000000008', partnerB_admin: '9000000009', pending1: '9000000012', finance1: '9000000013', procure1: '9000000014' };
+/** Test-only: drive the remaining installation tasks through submission and a passing QA inspection (real RPCs, as the people). */
+async function seedRemainingTasks(db, projectId) {
+  const ids = Object.fromEntries((await db.query(`select full_name, id from public.user_profiles where full_name like 'Test %'`)).rows.map((r) => [r.full_name.slice(5), r.id]));
+  const as = async (user, sql, params) => {
+    await db.query('begin');
+    try {
+      await db.query('set local role authenticated');
+      await db.query(`select set_config('request.jwt.claims', $1, true)`, [JSON.stringify({ sub: ids[user], role: 'authenticated' })]);
+      const r = await db.query(sql, params);
+      await db.query('commit');
+      return r.rows[0]?.r;
+    } catch (e) { await db.query('rollback'); throw e; }
+  };
+  const rpc = (user, fn, args) => {
+    const keys = Object.keys(args);
+    return as(user, `select public.${fn}(${keys.map((k, i) => `${k} => $${i + 1}`).join(', ')}) as r`, keys.map((k) => (args[k] !== null && typeof args[k] === 'object' ? JSON.stringify(args[k]) : args[k])));
+  };
+  const uid = () => crypto.randomUUID();
+  const safe = { ppe: 1, work_at_height: 1, electrical_isolation: 1, shaft_access_control: 1, barricading: 1, emergency_access: 1, tool_inspection: 1, supervisor_briefing: 1 };
+  const answersSafe = Object.fromEntries(Object.keys(safe).map((k) => [k, { applicable: true, confirmed: true }]));
+  const qa = (await db.query(`select value from public.business_rules where rule_key = 'qa.checklists' order by version desc limit 1`)).rows[0].value.checklists;
+  const tasks = (await db.query(`select t.id, t.code, t.version, t.status, t.checklist, t.evidence_required, a.partner_org_id from public.project_tasks t
+    join public.project_partner_assignments a on a.id = t.assignment_id where t.project_id = $1 order by t.sequence`, [projectId])).rows;
+  for (const t of tasks) {
+    if (t.status !== 'draft') continue;
+    const asg = await rpc('partnerA_admin', 'assign_task', { p_task_id: t.id, p_expected_version: t.version, p_assignee_id: ids.partnerA_tech, p_due_date: null });
+    const acc = await rpc('partnerA_tech', 'accept_task', { p_task_id: t.id, p_expected_version: asg.version });
+    await rpc('partnerA_tech', 'record_safety_check', { p_operation_id: uid(), p_task_id: t.id, p_answers: answersSafe });
+    const st = await rpc('partnerA_tech', 'start_task', { p_task_id: t.id, p_expected_version: acc.version });
+    const sp = await rpc('partnerA_tech', 'save_task_progress', { p_task_id: t.id, p_expected_version: st.version, p_answers: Object.fromEntries(t.checklist.map((k) => [k, { done: true }])), p_notes: null });
+    for (const c of t.evidence_required) {
+      const op = uid();
+      const path = `${t.partner_org_id}/tasks/${t.id}/${op}.jpg`;
+      await as('partnerA_tech', `insert into storage.objects (bucket_id, name, owner, metadata) values ('execution-evidence', $1, $2, $3) returning null as r`, [path, ids.partnerA_tech, { size: 2048, mimetype: 'image/jpeg' }]);
+      await rpc('partnerA_tech', 'register_task_evidence', { p_operation_id: op, p_task_id: t.id, p_payload: { category: c, storage_path: path, sha256: crypto.createHash('sha256').update(op).digest('hex'), mime_type: 'image/jpeg', size_bytes: 2048, captured_at: new Date().toISOString(), source: 'in_app_camera' } });
+    }
+    await rpc('partnerA_tech', 'submit_task', { p_task_id: t.id, p_expected_version: sp.version });
+    await rpc('qa1', 'record_inspection', { p_operation_id: uid(), p_payload: { task_id: t.id, answers: Object.fromEntries(qa[t.code].map((c) => [c.key, { result: 'pass' }])) } });
+  }
+}
+
+const PHONES = { owner: '9000000000', sales1: '9000000001', surveyor2: '9000000004', tech1: '9000000005', ops1: '9000000006', partnerA_admin: '9000000007', partnerA_tech: '9000000008', partnerB_admin: '9000000009', pending1: '9000000012', finance1: '9000000013', procure1: '9000000014', customer1: '9000000011', qa1: '9000000015' };
 const results = [];
 let shot = 0;
 
@@ -758,6 +799,121 @@ const expectText = (page, text) => async () => {
     await pb.getByText(T('error.NOT_FOUND.title')).first().waitFor({ timeout: 8000 });
     return 'partner B cannot open partner A’s project';
   });
+
+  // ---------- Slice 6: independent QA → defect and rework → final QA → statutory → handover → warranty → close ----------
+  addData('Floor 2 landing opening', 'No barricade at open landing', 'Barricade fixed at landing', 'Lift Inspectorate Pune', 'AIR-2026-77', 'OPL-2026-77',
+    'Mr. Rao, Society Secretary', 'Final project report', 'Approved specifications', 'Operating manual', 'Emergency instructions', 'Warranty certificate',
+    'Statutory documents', 'Maintenance schedule', 'Demo Customer Housing Society', 'Example Lifts', 'MRL');
+  const qp = await login(browser, 'qa1');
+  await qp.goto(`${BASE}/qa`);
+  await snap(qp, 's6-qa-queue', expectText(qp, T('work.task.mobilisation')));
+  await qp.locator(`a[href="/qa/tasks/${taskUrl.split('/').pop()}"]`).first().click();
+  await qp.waitForURL(/\/qa\/tasks\//, { waitUntil: 'commit' }); await qp.waitForLoadState('networkidle');
+  const qaTaskUrl = qp.url();
+  for (const sel of await qp.locator('select[name^="result_"]').all()) await sel.selectOption('pass');
+  await qp.selectOption('#result_site_safety_setup', 'fail');
+  await qp.selectOption('#defect_site_safety_setup_category', 'safety_component');
+  await qp.selectOption('#defect_site_safety_setup_severity', 'major');
+  await qp.fill('#defect_site_safety_setup_due', isoDayS(3));
+  await qp.fill('#defect_site_safety_setup_location', 'Floor 2 landing opening');
+  await qp.fill('#defect_site_safety_setup_description', 'No barricade at open landing');
+  await submitAction(qp, T('qa.record_inspection'));
+  await qp.reload(); await qp.waitForLoadState('networkidle');
+  await snap(qp, 's6-qa-defect-raised', expectText(qp, T('qa.defect_state.assigned')));
+
+  await pa.goto(assignmentUrl);
+  await snap(pa, 's6-partner-sees-defect', expectText(pa, T('partner.defects')));
+  await submitAction(pa, T('action.acknowledge'));
+  await tc.goto(taskUrl);
+  await submitAction(tc, T('action.start_correction'));
+  await tc.reload(); await tc.waitForLoadState('networkidle');
+  await tc.setInputFiles('input[id^="cf_"]', { name: 'correction.jpg', mimeType: 'image/jpeg', buffer: Buffer.from([0xff, 0xd8, 0xff, 0xe0, ...Buffer.from(`fix ${Date.now()}`), 0xff, 0xd9]) });
+  await tc.fill('input[id^="cr_"]', 'Barricade fixed at landing');
+  await submitAction(tc, T('work.add_correction_photo'));
+  await tc.reload(); await tc.waitForLoadState('networkidle');
+  await submitAction(tc, T('action.submit_correction'));
+  await tc.reload(); await tc.waitForLoadState('networkidle');
+  await snap(tc, 's6-technician-rework-correction', expectText(tc, T('work.resubmit')));
+  await submitAction(tc, T('work.resubmit'));
+  await qp.goto(qaTaskUrl);
+  for (const sel of await qp.locator('select[name^="result_"]').all()) await sel.selectOption('pass');
+  await qp.selectOption('select[name^="decision_"]', 'verify');
+  await submitAction(qp, T('qa.record_inspection'));
+  await qp.reload(); await qp.waitForLoadState('networkidle');
+  await snap(qp, 's6-qa-reinspection-approved', async () => {
+    await qp.getByText(T('qa.defect_state.closed')).first().waitFor({ timeout: 8000 });
+    await qp.getByText(T('work.state.approved')).first().waitFor({ timeout: 8000 });
+    return 'defect closed with correction evidence; task QA-approved';
+  });
+
+  // The remaining six tasks go through the same RPCs (test seeding), then final QA in the screens.
+  const q6 = new Client({ connectionString: process.env.AIEC_E2E_DATABASE_URL ?? 'postgres://postgres@127.0.0.1:54329/aiec_test' });
+  await q6.connect();
+  await seedRemainingTasks(q6, projectId);
+  await q6.end();
+  await op.goto(projectUrl);
+  await submitAction(op, T('action.submit_final_qa'));
+  await qp.goto(`${BASE}/qa`);
+  await qp.locator(`a[href="/qa/projects/${projectId}"]`).click();
+  await qp.waitForURL(/\/qa\/projects\//, { waitUntil: 'commit' }); await qp.waitForLoadState('networkidle');
+  for (const sel of await qp.locator('select[name^="result_"]').all()) await sel.selectOption('pass');
+  await submitAction(qp, T('qa.record_inspection'));
+  await qp.reload(); await qp.waitForLoadState('networkidle');
+  await snap(qp, 's6-final-qa-passed', expectText(qp, T('project.state.statutory_pending')));
+
+  // Gate 12: Operations records the official documents; the Owner (a second person) verifies them.
+  await op.goto(projectUrl);
+  for (const [type, ref] of [['authority_inspection_report', 'AIR-2026-77'], ['operating_licence', 'OPL-2026-77']]) {
+    await op.locator('details').filter({ has: op.locator('#evidence_type') }).evaluate((d) => { d.open = true; });
+    await op.selectOption('#evidence_type', type);
+    await op.fill('#authority', 'Lift Inspectorate Pune');
+    await op.fill('#reference_number', ref);
+    await op.fill('#st_issued_on', isoDayS(0));
+    await op.setInputFiles('#st_file', { name: `${type}.pdf`, mimeType: 'application/pdf', buffer: Buffer.from(`%PDF-1.4\n% ${type} ${Date.now()}\n%%EOF\n`) });
+    await submitAction(op, T('handover.record_statutory'));
+    await op.reload(); await op.waitForLoadState('networkidle');
+  }
+  await snap(op, 's6-ops-statutory-recorded', expectText(op, T('handover.second_person')));
+  await ow.goto(projectUrl);
+  for (let n = 0; n < 2; n++) {
+    await submitAction(ow, T('handover.verify_statutory'));
+    await ow.reload(); await ow.waitForLoadState('networkidle');
+  }
+  await op.goto(projectUrl);
+  await submitAction(op, T('action.record_statutory_clearance'));
+  await op.reload(); await op.waitForLoadState('networkidle');
+  // Gate 13: the package, the customer link, then the customer signs off in the portal.
+  for (const doc of ['final_project_report', 'approved_specifications', 'operating_manual', 'emergency_instructions', 'warranty_certificate', 'statutory_documents', 'maintenance_schedule']) {
+    await op.locator('details').filter({ has: op.locator('#ho_doc_type') }).evaluate((d) => { d.open = true; });
+    await op.selectOption('#ho_doc_type', doc);
+    await op.fill('#ho_title', doc.split('_').map((w, i) => (i === 0 ? w[0].toUpperCase() + w.slice(1) : w)).join(' '));
+    await op.setInputFiles('#ho_file', { name: `${doc}.pdf`, mimeType: 'application/pdf', buffer: Buffer.from(`%PDF-1.4\n% ${doc} ${Date.now()}\n%%EOF\n`) });
+    await submitAction(op, T('handover.add_document'));
+    await op.reload(); await op.waitForLoadState('networkidle');
+  }
+  addData('Final project report', 'Approved specifications', 'Operating manual', 'Emergency instructions', 'Warranty certificate', 'Statutory documents', 'Maintenance schedule');
+  await submitAction(op, T('handover.link_customer'));
+  await op.reload(); await op.waitForLoadState('networkidle');
+  await submitAction(op, T('action.confirm_ready'));
+  await op.reload(); await op.waitForLoadState('networkidle');
+  await snap(op, 's6-ops-package-sent', expectText(op, T('handover.state.ready')));
+
+  const cu = await login(browser, 'customer1');
+  await cu.goto(`${BASE}/customer`);
+  await snap(cu, 's6-customer-home', expectText(cu, T('customer.action_needed')));
+  await cu.goto(`${BASE}/customer/projects/${projectId}`);
+  await cu.fill('#acceptor_name', 'Mr. Rao, Society Secretary');
+  await submitAction(cu, T('customer.accept_handover'));
+  await cu.reload(); await cu.waitForLoadState('networkidle');
+  await snap(cu, 's6-customer-accepted-warranty', async () => {
+    await cu.getByText(T('handover.warranty_state.active')).first().waitFor({ timeout: 8000 });
+    if (await cu.getByText(T('order.contract_value')).count()) throw new Error('customer must not see internal contract data');
+    return 'handover accepted; warranty active; no internal data';
+  });
+  await op.goto(projectUrl);
+  await submitAction(op, T('action.close'));
+  await op.reload(); await op.waitForLoadState('networkidle');
+  await snap(op, 's6-ops-project-closed', expectText(op, T('project.state.closed')));
 
 
   // ---------- Mobile viewport (sales) ----------

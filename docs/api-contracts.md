@@ -150,6 +150,22 @@ Operator-only (SQL editor, not exposed to API roles): `app.bootstrap_platform(ow
 | `project_execution_action` | `p_project_id`, `p_expected_version`, `p_action` (mark_installation_ready / start_installation) | `project.plan` | Ready only with every dimension true (names the missing ones); start refused under a safety stop | `project.installation_ready/started`; notifies the partner |
 | `staff_display_names` | `p_ids[]` | any active member | Names only: AIEC staff see AIEC and partner people; partner people see their own organization | — |
 
+## QA to handover (Slice 6)
+
+| RPC | Arguments | Who | Behaviour | Audit / notify |
+|---|---|---|---|---|
+| `record_inspection` | `p_operation_id`, `p_payload` {task_id or project_id (final), answers {key: {result, note}}, notes, defects [{criterion_key, category, severity, location, description, correction_due_date}], defect_decisions [{defect_id, decision verify/reject, reason}]} | AIEC / QA-agency `qa.inspection.decide`, never a member of the partner (Gate 10) | Checklist from rule `qa.checklists` (= domain `evaluateInspection`); a failed criterion needs a defect; every correction waiting for reinspection needs a decision; passed → task approved (inspector ≠ submitter), failed → rework; final: passed → `statutory_pending` (no open defect), failed → back to installation (notes) | `inspection.recorded`, `defect.*`, `task.qa_*`, `project.final_qa_*`; critical defects alert Operations |
+| `defect_action` | `p_defect_id`, `p_expected_version`, `p_action` (acknowledge / dispute: partner; start_correction / submit_correction: assignee; resolve_dispute: QA), `p_reason` | per action | Submission needs a correction photo linked to the defect | `defect.*` |
+| `register_task_evidence` | adds `defect_id` for category `correction` | the assignee | Correction photos belong to a defect in correction | `task.evidence_registered` |
+| `resubmit_task` | `p_task_id`, `p_expected_version` | the assignee | Rework → submitted when every defect has a submitted correction | `task.resubmitted`; notifies QA |
+| `project_quality_action` | `p_project_id`, `p_expected_version`, `p_action` (submit_final_qa / record_statutory_clearance / close), `p_reason` | `project.plan` | Final QA needs every task approved; clearance needs every required statutory type verified and in date; close needs the lift asset | `project.*` |
+| `register_statutory_evidence` | `p_operation_id`, `p_project_id`, `p_payload` {evidence_type, authority, reference_number, issued_on, valid_until, file fields} | `project.plan` | Private `handover-documents` bucket; immutable apart from one verification | `statutory.recorded`; notifies the Owner |
+| `verify_statutory_evidence` | `p_evidence_id`, `p_decision`, `p_reason` | `approval.exception.decide`, never the recorder | — | `statutory.verified/rejected` |
+| `register_handover_document` | `p_operation_id`, `p_project_id`, `p_payload` {doc_type, title, file fields} | `project.plan` | Not while the package is with the customer | `handover.document_added` |
+| `link_project_customer` | `p_project_id`, `p_expected_version`, `p_customer_org_id` | `project.plan` | Customer organizations only | `project.customer_linked` |
+| `handover_action` | `p_project_id`, `p_action` (confirm_ready / recheck) | `project.plan` | Ready needs the project at handover_ready, all 7 documents, verified statutory evidence and a linked customer | `handover.ready`; notifies the customer |
+| `customer_handover_decision` | `p_project_id`, `p_decision` (accept / raise_issue), `p_acceptor_name`, `p_comment` | the linked customer's `customer.approval.decide` | Accept: handover accepted, project handed over, lift asset created, warranty activated from `warranty.terms` with its source date; issues need a description | `handover.accepted/issues_raised`, `project.handed_over`, `warranty.activated` |
+
 ## Read access (RLS summary)
 
 | Data | Visible to |
@@ -170,3 +186,5 @@ Slice 3 reads: technical records follow `technical.review` / `survey.read_all` i
 Slice 4 reads: a project (no money) is visible to Operations / Owner (`project.read_all`), Technical, Finance, Procurement and the lead's sales owner. Orders, milestones and payment claims (customer money) only to Operations / Owner, Finance and the lead's sales owner. Purchase requests, supplier quotes, POs and goods receipts (supplier prices) only to Procurement, Operations / Owner and Finance. Supplier organizations are readable by Procurement, Operations / Owner and Finance.
 
 Slice 5 reads: a partner company's profile is visible to its members and to AIEC overseers (`partner.verify`, `partner.assign`, `project.read_all`); its compliance documents only to its admins and AIEC overseers. An invitation / assignment (with the partner's contract value) is visible to AIEC execution managers, Finance and the partner's admins / supervisors, never to technicians or Sales. Tasks, safety checks and evidence: AIEC execution managers, the partner's admins / supervisors and the assignee. Partner people see the project title, site and status of projects they are invited to or work on, never orders, milestones, quotations or supplier prices.
+
+Slice 6 reads: inspections and defects follow the task (AIEC execution managers and QA, the partner's admins / supervisors, the assignee). Statutory evidence: AIEC execution managers, QA and the Owner. The linked customer's people read their project row, the handover package, the handover status and the lift asset / warranty — never orders, milestones, tasks, defects, partner terms, purchasing or statutory drafts.
